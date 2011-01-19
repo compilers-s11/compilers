@@ -12,7 +12,7 @@ namespace
 	struct LocalOpts : public BasicBlockPass
 	{
 		static char ID;
-		LocalOpts : BasicBlockPass(ID) {}
+		LocalOpts() : BasicBlockPass(ID) {}
 		
 		virtual bool runOnBasicBlock(BasicBlock &bb) {
 			bool modified = false;
@@ -25,6 +25,6 @@ namespace
 		}
 	};
 	
-	char Hello::ID = 0;
-	static RegisterPass x("LocalOpts", "LocalOpts", false, false);
+	char LocalOpts::ID = 0;
+	static RegisterPass<LocalOpts> x("LocalOpts", "LocalOpts", false, false);
 }
