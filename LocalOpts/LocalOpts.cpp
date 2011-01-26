@@ -18,8 +18,8 @@ namespace
 		static char ID;
 		LocalOpts() : BasicBlockPass(ID) {}
 
-                void propagateLoad(LoadInst *l, Value * val) {
-                        l->replaceAllUsesWith(val);
+                void propagateConstant(Instruction *i, Value * val) {
+                        i->replaceAllUsesWith(val);
                 }
 		
 		virtual bool runOnBasicBlock(BasicBlock &bb) {
@@ -45,8 +45,8 @@ namespace
                                                 if (isa<Constant>(*val)) {
                                                         errs() << "Constant\n";
                                                         for (Value::use_iterator u = ptr->use_begin(); u != ptr->use_end(); ++u) {
-                                                                if (LoadInst *l = cast<LoadInst>(*u)) {
-                                                                        propagateLoad(l, val);
+                                                                if (LoadInst *l = dyn_cast<LoadInst>(*u)) {
+                                                                        propagateConstant(l, val);
                                                                         modified = true;
                                                                 }
 
