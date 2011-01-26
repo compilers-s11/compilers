@@ -61,7 +61,8 @@ namespace
                 ReplaceInstWithValue(i->getParent()->getInstList(), i, R);
                 modified = true;
               } else if (ConstantInt *RC = dyn_cast<ConstantInt>(R)) {
-                LC->getValue() + RC->getValue();
+                APInt result = LC->getValue() + RC->getValue();
+                ReplaceInstWithValue(i->getParent()->getInstList(), i, Constant::getIntegerValue(LC->getType(), result));
               }
             } else if (ConstantInt *RC = dyn_cast<ConstantInt>(R)) {
               if (RC->isZero()) {
