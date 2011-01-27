@@ -23,7 +23,7 @@ cyrus@cmu.edu
 \item The number of call sites a function has is important in determining whether inlining it will increase the size of the assembly unacceptably. If this number is small, inlining can occur safely. The threshold is higher for functions with fewer instructions.
 \item The number of call sites can be a heuristic indicator of the relative importance of a function in a program. The number of basic blocks can similarly serve as a heuristic measure of the complexity of control flow through a function. 
 
-If the number of basic blocks is small, it may be fruitful to use asymptotically inefficient optimization techniques because the actual magnitude of time it takes remains small.
+If the number of basic blocks is small, it may be fruitful to use asymptotically inefficient optimization techniques because the absolute magnitude of time it takes remains small.
 
 The number of instructions can be useful in estimating the amount of time it may take to run a pass  on the function.
 \end{enumerate}
