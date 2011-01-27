@@ -182,6 +182,35 @@ namespace
         }
         //errs() << *i << "\n";
       }
+      
+      // Strength reduction
+      if (!modified) {
+        switch (op) {
+          case Instruction::Mul:
+            // multiplication by power of 2
+            if (ConstantInt* LC = dyn_cast<ConstantInt>(L)) {
+              const APInt left = LC->getValue();
+              if (left.isPowerOf2()) {
+                unsigned lg = left.logBase2();
+                BinaryOperator* newInst = BinaryOperator::Create(
+                  Instruction::Shl, 
+                  R, ConstantInt::get(LC->getType(), lg, false));
+                ReplaceInstWithInst(i->getParent()->getInstList(), i, newInst);
+                modified = true;
+              }
+            } else if (ConstantInt* RC = dyn_cast<ConstantInt>(R)) {
+              const APInt right = RC->getValue();
+              if (right.isPowerOf2()) {
+                unsigned lg = right.logBase2();
+                BinaryOperator* newInst = BinaryOperator::Create(
+                  Instruction::Shl,
+                  R, ConstantInt::get(LC->getType(), lg, false));
+                ReplaceInstWithInst(i->getParent()->getInstList(), i, newInst);
+                modified = true;
+              }
+            }
+        }
+      }
       return modified;
     }
   };
