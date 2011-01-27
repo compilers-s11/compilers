@@ -165,9 +165,11 @@ namespace
 
     virtual bool runOnBasicBlock(BasicBlock &bb) {
       bool modified = false;
+      bool iModified;
       // Iterate over instructions
       for (BasicBlock::iterator i = bb.begin(), e = bb.end(); i != e; ++i)
       {
+        iModified = false;
         Value* L; Value* R;
         if (i->getNumOperands() == 2) {
           L = i->getOperand(0);
@@ -190,7 +192,7 @@ namespace
                 for (Value::use_iterator u = ptr->use_begin(); u != ptr->use_end(); ++u) {
                   if (LoadInst *l = dyn_cast<LoadInst>(*u)) {
                     propagateConstant(l, val);
-                    modified = true;
+                    modified = iModified = true;
                   }
                 }
               }
@@ -203,7 +205,7 @@ namespace
               APInt zeroAP = APInt(cast<IntegerType>(i->getType())->getBitWidth(), 0);
               if (constIdentities<ConstantInt,APInt>(L, R, &zeroAP, NULL, val)) {
                 i->replaceAllUsesWith(val);
-                modified = true;
+                modified = iModified = true;
               }
             }
             break;
@@ -213,7 +215,7 @@ namespace
               APFloat zeroAP = APFloat((float)0);
               if (constIdentities<ConstantFP,APFloat>(L, R, &zeroAP, NULL, val)) {
                 i->replaceAllUsesWith(val);
-                modified = true;
+                modified = iModified = true;
               }
             }
             break;
@@ -225,10 +227,10 @@ namespace
               ConstantInt * zeroC = ConstantInt::get(L->getContext(), zeroAP);
               if (Value * changedVal = selfInverse<ConstantInt>(L, R, zeroC)) {
                 i->replaceAllUsesWith(changedVal);
-                modified = true;
+                modified = iModified = true;
               } else if (constIdentities<ConstantInt,APInt>(L, R, &zeroAP, NULL, val)) {
                 i->replaceAllUsesWith(val);
-                modified = true;
+                modified = iModified = true;
               }
             }
             break;
@@ -242,7 +244,7 @@ namespace
               APInt oneAP = APInt(cast<IntegerType>(i->getType())->getBitWidth(), 1);
               if (constIdentities<ConstantInt,APInt>(L, R, &oneAP, &zeroAP, val)) {
                 i->replaceAllUsesWith(val);
-                modified = true;
+                modified = iModified = true;
               }
             }
             break;
@@ -255,7 +257,7 @@ namespace
               ConstantInt * one = ConstantInt::get(L->getContext(), APInt(cast<IntegerType>(i->getType())->getBitWidth(), 1));
               if (Value * changedVal = selfInverse(L, R, one)) {
                 i->replaceAllUsesWith(changedVal);
-                modified = true;
+                modified = iModified = true;
               }
               break;
             }
@@ -277,16 +279,16 @@ namespace
         }
         
         // Constant folding
-        if (!modified) {
+        if (!iModified) {
           if (i->getNumOperands() == 2 && isa<Constant>(L) && isa<Constant>(R)) {
             Value * result = evalBinaryOp(op, L, R);
             i->replaceAllUsesWith(result);
-            modified = true;
+            modified = iModified = true;
           }
         }
         
         // Strength reduction
-        if (!modified) {
+        if (!iModified) {
           switch (op) {
             case Instruction::Mul:
               // multiplication by power of 2
@@ -298,7 +300,7 @@ namespace
                     Instruction::Shl, 
                     R, ConstantInt::get(LC->getType(), lg, false));
                   ReplaceInstWithInst(i->getParent()->getInstList(), i, newInst);
-                  modified = true;
+                  modified = iModified = true;
                 }
               } else if (ConstantInt* RC = dyn_cast<ConstantInt>(R)) {
                 const APInt right = RC->getValue();
@@ -306,9 +308,9 @@ namespace
                   unsigned lg = right.logBase2();
                   BinaryOperator* newInst = BinaryOperator::Create(
                     Instruction::Shl,
-                    R, ConstantInt::get(RC->getType(), lg, false));
+                    L, ConstantInt::get(RC->getType(), lg, false));
                   ReplaceInstWithInst(i->getParent()->getInstList(), i, newInst);
-                  modified = true;
+                  modified = iModified = true;
                 }
               }
           }
