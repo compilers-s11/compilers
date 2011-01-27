@@ -14,6 +14,13 @@ using namespace llvm;
 APFloat::roundingMode rMode = APFloat::rmNearestTiesToEven;
 namespace
 {
+    template<class C, class AP>
+    bool valEquals (C *L, AP* R);
+
+    template<>
+      bool valEquals (ConstantInt *L, APInt *R) {return L->getValue().eq(*R);}
+    template<>
+      bool valEquals (ConstantFP *L, APFloat *R) {return L->getValueAPF().compare(*R) == APFloat::cmpEqual;}
 
   struct LocalOpts : public BasicBlockPass
   {
@@ -24,32 +31,40 @@ namespace
       i->replaceAllUsesWith(val);
     }
 
-    bool constIdentities (unsigned opcode, Value *L, Value * R, uint64_t *identity, uint64_t *zero, Value * &retval) {
-      if (ConstantInt *LC = dyn_cast<ConstantInt>(L)) {
-        if (identity && LC->equalsInt(*identity)) {
-          retval = L;
+
+    template<class C, class AP>
+    bool constIdentities (Value *L, Value * R, AP *identity, AP *zero, Value * &retval) {
+      if (C *LC = dyn_cast<C>(L)) {
+        if (identity && valEquals<C,AP>(LC,identity)) {
+          retval = R;
           return true;
-        } else if (zero && (LC->equalsInt(*zero))) {
-          retval = Constant::getIntegerValue(LC->getType(), APInt(LC->getBitWidth(), *zero));
-          return true;
-        } else if (ConstantInt *RC = dyn_cast<ConstantInt>(R)) {
-          APInt result = LC->getValue() + RC->getValue();
-          retval = Constant::getIntegerValue(LC->getType(), result);
+        } else if (zero && valEquals<C,AP>(LC,zero)) {
+          retval = C::get(LC->getContext(), *zero);
           return true;
         }
-      } else if (ConstantInt *RC = dyn_cast<ConstantInt>(R)) {
-        if (identity && RC->equalsInt(*identity)) {
+      } 
+      
+      if (C *RC = dyn_cast<C>(R)) {
+        if (identity && valEquals<C,AP>(RC,identity)) {
           retval = L;
           return true;
-        } else if (zero && (RC->equalsInt(*zero))) {
-          retval = Constant::getIntegerValue(RC->getType(), APInt(RC->getBitWidth(), *zero));
+        } else if (zero && valEquals<C,AP>(RC,zero)) {
+          retval = C::get(RC->getContext(), *zero);
           return true;
         }
       }
       return false;
     }
 
-    Value * selfInverse (Value *L, Value *R, uint64_t zero) {
+   
+   template<class C>
+   Value * selfInverse (Value *L, Value *R, C * zero) {
+      if (cast<Instruction>(L)->isIdenticalTo(cast<Instruction>(R))) {
+        return zero;
+      } else return NULL;
+    }
+
+   Value * selfInverseOld (Value *L, Value *R, uint64_t zero) {
       if (cast<Instruction>(L)->isIdenticalTo(cast<Instruction>(R))) {
         return ConstantInt::get(L->getContext(), APInt(32, zero));
       } else return NULL;
@@ -159,7 +174,6 @@ namespace
           R = i->getOperand(1);
         }
 
-        errs() << *i << "\n";
         unsigned op = i->getOpcode();
         // Algebraic identities & constant propagation
         switch (op) {
@@ -186,24 +200,33 @@ namespace
             // Algebraic identities
             {
               Value * val;
-              uint64_t zero = 0;
-              if (constIdentities((unsigned)Instruction::Add, L, R, &zero, NULL, val)) {
+              APInt zeroAP = APInt(cast<IntegerType>(i->getType())->getBitWidth(), 0);
+              if (constIdentities<ConstantInt,APInt>(L, R, &zeroAP, NULL, val)) {
                 i->replaceAllUsesWith(val);
                 modified = true;
               }
             }
             break;
           case Instruction::FAdd:
+            {
+              Value * val;
+              APFloat zeroAP = APFloat((float)0);
+              if (constIdentities<ConstantFP,APFloat>(L, R, &zeroAP, NULL, val)) {
+                i->replaceAllUsesWith(val);
+                modified = true;
+              }
+            }
             break;
           case Instruction::Sub:
             // Algebraic identities
             {
               Value * val = NULL;
-              uint64_t zero = 0;
-              if (Value * changedVal = selfInverse(L, R, zero)) {
+              APInt zeroAP = APInt(cast<IntegerType>(i->getType())->getBitWidth(), 0);
+              ConstantInt * zeroC = ConstantInt::get(L->getContext(), zeroAP);
+              if (Value * changedVal = selfInverse<ConstantInt>(L, R, zeroC)) {
                 i->replaceAllUsesWith(changedVal);
                 modified = true;
-              } else if (constIdentities((unsigned)Instruction::Sub, L, R, &zero, NULL, val)) {
+              } else if (constIdentities<ConstantInt,APInt>(L, R, &zeroAP, NULL, val)) {
                 i->replaceAllUsesWith(val);
                 modified = true;
               }
@@ -215,9 +238,9 @@ namespace
             // Algebraic identities
             {
               Value * val;
-              uint64_t zero = 0;
-              uint64_t one = 1;
-              if (constIdentities((unsigned)Instruction::Sub, L, R, &one, &zero, val)) {
+              APInt zeroAP = APInt(cast<IntegerType>(i->getType())->getBitWidth(), 0);
+              APInt oneAP = APInt(cast<IntegerType>(i->getType())->getBitWidth(), 1);
+              if (constIdentities<ConstantInt,APInt>(L, R, &oneAP, &zeroAP, val)) {
                 i->replaceAllUsesWith(val);
                 modified = true;
               }
@@ -227,16 +250,16 @@ namespace
             break;
           case Instruction::UDiv:
           case Instruction::SDiv:
-          case Instruction::FDiv:
             {
               Value * val = NULL;
-              uint64_t one = 1;
+              ConstantInt * one = ConstantInt::get(L->getContext(), APInt(cast<IntegerType>(i->getType())->getBitWidth(), 1));
               if (Value * changedVal = selfInverse(L, R, one)) {
                 i->replaceAllUsesWith(changedVal);
                 modified = true;
               }
               break;
             }
+          case Instruction::FDiv:
           case Instruction::URem:
           case Instruction::SRem:
           case Instruction::FRem:
