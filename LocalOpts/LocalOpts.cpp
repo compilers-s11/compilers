@@ -31,6 +31,28 @@ namespace
       i->replaceAllUsesWith(val);
     }
 
+    template<class C, class AP>
+    Value * constIdentity (Value *L, Value * R, AP *identity, AP *zero) {
+      if (C *LC = dyn_cast<C>(L)) {
+        if (identity && valEquals<C,AP>(LC,identity)) {
+          return R;
+        } else if (zero && valEquals<C,AP>(LC,zero)) {
+          return C::get(LC->getContext(), *zero);
+        }
+      } 
+      return NULL;
+    }
+      
+    template<class C, class AP>
+    Value * commIdentities (Value *L, Value * R, AP *identity, AP *zero) {
+      if (Value * changedVal = constIdentity<C,AP>(L,R,identity,zero)) {
+        return changedVal;
+      } else if (Value * changedVal = constIdentity<C,AP>(R,L,identity,zero)) {
+        return changedVal;
+      } else {
+        return NULL;
+      }
+    }
 
     template<class C, class AP>
     Value * constIdentities (Value *L, Value * R, AP *identity, AP *zero) {
@@ -198,7 +220,7 @@ namespace
             // Algebraic identities
             {
               APInt zeroAP = APInt(cast<IntegerType>(i->getType())->getBitWidth(), 0);
-              if (Value * changedVal = constIdentities<ConstantInt,APInt>(L, R, &zeroAP, NULL)) {
+              if (Value * changedVal = commIdentities<ConstantInt,APInt>(L, R, &zeroAP, NULL)) {
                 i->replaceAllUsesWith(changedVal);
                 modified = iModified = true;
               }
