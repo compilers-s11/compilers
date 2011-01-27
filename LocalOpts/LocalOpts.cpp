@@ -81,9 +81,9 @@ namespace
           case Instruction::Add:
             // Algebraic identities
             {
-            Value * val;
-            uint64_t zero = 0;
-            if (constIdentities((unsigned)Instruction::Add, L, R, &zero, NULL, val)) {
+              Value * val;
+              uint64_t zero = 0;
+              if (constIdentities((unsigned)Instruction::Add, L, R, &zero, NULL, val)) {
                 i->replaceAllUsesWith(val);
                 modified = true;
               }
@@ -93,9 +93,9 @@ namespace
           case Instruction::Sub:
             // Algebraic identities
             {
-            Value * val;
-            uint64_t zero = 0;
-            if (constIdentities((unsigned)Instruction::Sub, L, R, &zero, NULL, val)) {
+              Value * val;
+              uint64_t zero = 0;
+              if (constIdentities((unsigned)Instruction::Sub, L, R, &zero, NULL, val)) {
                 i->replaceAllUsesWith(val);
                 modified = true;
               }
@@ -105,10 +105,10 @@ namespace
           case Instruction::Mul:
             // Algebraic identities
             {
-            Value * val;
-            uint64_t zero = 0;
-            uint64_t one = 1;
-            if (constIdentities((unsigned)Instruction::Sub, L, R, &one, &zero, val)) {
+              Value * val;
+              uint64_t zero = 0;
+              uint64_t one = 1;
+              if (constIdentities((unsigned)Instruction::Sub, L, R, &one, &zero, val)) {
                 i->replaceAllUsesWith(val);
                 modified = true;
               }
