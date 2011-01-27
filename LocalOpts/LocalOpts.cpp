@@ -278,22 +278,27 @@ namespace
                     R, ConstantInt::get(LC->getType(), lg, false));
                   ReplaceInstWithInst(i->getParent()->getInstList(), i, newInst);
                   modified = iModified = true;
+                  i = newInst;
                 }
               } else if (ConstantInt* RC = dyn_cast<ConstantInt>(R)) {
                 const APInt right = RC->getValue();
-                if (right.isPowerOf2()) {
+                if (right.isPowerOf2()) {                  
                   unsigned lg = right.logBase2();
                   BinaryOperator* newInst = BinaryOperator::Create(
                     Instruction::Shl,
                     L, ConstantInt::get(RC->getType(), lg, false));
-                  ReplaceInstWithInst(i->getParent()->getInstList(), i, newInst);
+                  i->getParent()->getInstList().insertAfter(i, newInst);
+                  i->replaceAllUsesWith(newInst);
+                  //i++;
+                  //i->getParent()->getInstList().remove(i);
+      //            i->replaceAllUsesWith(newInst);
+                  //ReplaceInstWithInst(i->getParent()->getInstList(), i, newInst);
                   modified = iModified = true;
-                }
+                  }
               }
           }
         }
       }
-      
       
       return modified;
     }
