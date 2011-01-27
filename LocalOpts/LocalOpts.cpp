@@ -58,7 +58,7 @@ namespace
           R = i->getOperand(1);
         }
 
-              errs() << *i << "\n";
+        errs() << *i << "\n";
         unsigned op = i->getOpCode();
         switch (op) {
           default:
@@ -92,6 +92,7 @@ namespace
                          && ConstantInt* RC = dyn_cast<ConstantInt>(R)) {
                 ConstantInt* result = evalBinaryIntOp(op, LC, RC);
                 i->replaceAllUsesWith(val);
+                modified = true;
               }
             }
             break;
@@ -139,6 +140,46 @@ namespace
 
             break;
         }
+        
+        // Constant folding
+        if (!modified) {
+          switch (op) {
+            case Instruction::Add:
+            case Instruction::Sub:
+            case Instruction::Mul:
+            case Instruction::UDiv:
+            case Instruction::SDiv:
+            case Instruction::URem:
+            case Instruction::SRem:
+            case Instruction::Shl:
+            case Instruction::LShr:
+            case Instruction::AShr:
+            case Instruction::And:
+            case Instruction::Or:
+            case Instruction::Xor:
+              if (ConstantInt* LC = dyn_cast<ConstantInt>(L)
+                  && ConstantInt* RC = dyn_cast<ConstantInt>(R)) {
+                ConstantInt* result = evalBinaryIntOp(op, LC, RC);
+                i->replaceAllUsesWith(result);
+                modified = true;
+              }
+              break;
+              
+            case Instruction::FAdd:
+            case Instruction::FSub:
+            case Instruction::FMul:
+            case Instruction::FDiv:
+            case Instruction::FRem:
+              if (ConstantFP* LC = dyn_cast<ConstantFP>(L)
+                  && ConstantFP* RC = dyn_cast<ConstantFP>(R)) {
+                ConstantInt* result = evalBinaryFloatOp(op, LC, RC);
+                i->replaceAllUsesWith(result);
+                modified = true;
+              }
+              break;
+              
+          }
+        }
         //errs() << *i << "\n";
       }
       return modified;
@@ -149,76 +190,46 @@ namespace
   static RegisterPass<LocalOpts> x("LocalOpts", "LocalOpts", false, false);
 }
 
-Value* evalBinaryOp(unsigned op, Value* left, Value* right) {
+ConstantInt* evalBinaryIntOp(unsigned op, ConstantInt* left_v, ConstantInt* right_v) {
   switch op {
     case Instruction::Add:
-    case Instruction::Sub:
-    case Instruction::Mul:
-    case Instruction::UDiv:
-    case Instruction::SDiv:
-    case Instruction::URem:
-    case Instruction::SRem:
-    case Instruction::Shl:
-    case Instruction::LShr:
-    case Instruction::AShr:
-    case Instruction::And:
-    case Instruction::Or:
-    case Instruction::Xor:
-      return evalBinaryIntOp(op, 
-        dyn_cast<ConstantInt>(left), 
-        dyn_cast<ConstantInt>(right));
-      
-    case Instruction::FAdd:
-    case Instruction::FSub:
-    case Instruction::FMul:
-    case Instruction::FDiv:
-    case Instruction::FRem:
-      return evalBinaryFloatOp(op, 
-        dyn_cast<ConstantFP>(left), 
-        dyn_cast<ConstantFP>(right));
-  }
-}
-
-ConstantInt* evalBinaryIntOp(unsigned op, Value* left_v, Value* right_v) {
-  switch op {
-    case Instruction::Add:
-      return ConstantInt::get(left->getType(), 
+      return ConstantInt::get(left->getContext(), 
         left->getValue() + right->getValue());
     case Instruction::Sub:
-      return ConstantInt::get(left->getType(), 
+      return ConstantInt::get(left->getContext(), 
         left->getValue() - right->getValue());
     case Instruction::Mul:
-      return ConstantInt::get(left->getType(), 
+      return ConstantInt::get(left->getContext(), 
         left->getValue() * right->getValue());
     case Instruction::UDiv:
-      return ConstantInt::get(left->getType(), 
+      return ConstantInt::get(left->getContext(), 
         left->getValue().udiv(right->getValue());
     case Instruction::SDiv:
-      return ConstantInt::get(left->getType(), 
+      return ConstantInt::get(left->getContext(), 
         left->getValue().sdiv(right->getValue());
     case Instruction::URem:
-      return ConstantInt::get(left->getType(), 
+      return ConstantInt::get(left->getContext(), 
         left->getValue().urem(right->getValue());
     case Instruction::SRem:
-      return ConstantInt::get(left->getType(), 
+      return ConstantInt::get(left->getContext(), 
         left->getValue().srem(right->getValue());
     case Instruction::Shl:
-      return ConstantInt::get(left->getType(), 
+      return ConstantInt::get(left->getContext(), 
         left->getValue().shl(right->getValue());
     case Instruction::LShr:
-      return ConstantInt::get(left->getType(), 
+      return ConstantInt::get(left->getContext(), 
         left->getValue().lshr(right->getValue());
     case Instruction::AShr:
-      return ConstantInt::get(left->getType(), 
+      return ConstantInt::get(left->getContext(), 
         left->getValue().ashr(right->getValue());
     case Instruction::And:
-      return ConstantInt::get(left->getType(), 
+      return ConstantInt::get(left->getContext(), 
         left->getValue() & right->getValue());
     case Instruction::Or:
-      return ConstantInt::get(left->getType(), 
+      return ConstantInt::get(left->getContext(), 
         left->getValue() | right->getValue());
     case Instsruction::Xor:
-      return ConstantInt::get(left->getType(), 
+      return ConstantInt::get(left->getContext(), 
         left->getValue() ^ right->getValue());
     }
 }
