@@ -102,3 +102,14 @@ namespace
   char LocalOpts::ID = 0;
   static RegisterPass<LocalOpts> x("LocalOpts", "LocalOpts", false, false);
 }
+
+
+Value* evalBinaryOp(unsigned op, Value* left, Value* right) {
+  switch op {
+    case Instruction::Add:
+	  return ConstantInt::get(left->Type, 
+							  dyn_cast<ConstantInt*>(left)->getValue() + 
+							  dyn_cast<ConstantInt*>(right)->getValue());
+    case Instruction::Sub:
+  }
+}
