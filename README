@@ -1,1 +1,10 @@
-asdsadadas
+Place this entire directory in lib/analysis in your LLVM source tree.
+
+Compiling:
+For FunctionInfo, navigate to the FunctionInfo directory, and then run make
+For LocalOpts, navigate to the LocalOpts directory, and then run make
+
+Running: 
+Suppose in.o is the compiled file you wish to run this pass on. LLVMDIR is the root directory of the llvm source tree. We assume opt is in your path
+opt --load LLVMDIR/Debug/lib/LocalOpts.so -LocalOpts in.o -o out
+

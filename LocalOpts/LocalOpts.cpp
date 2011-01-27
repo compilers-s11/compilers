@@ -14,6 +14,14 @@ using namespace llvm;
 APFloat::roundingMode rMode = APFloat::rmNearestTiesToEven;
 namespace
 {
+  struct OptInfo {
+      unsigned constProp;
+      unsigned constFold;
+      unsigned algebraic;
+      unsigned strengthRed;
+  };
+
+
   template<class C, class AP>
     bool valEquals (C *L, AP* R);
 
@@ -22,10 +30,10 @@ namespace
   template<>
     bool valEquals (ConstantFP *L, APFloat *R) {return L->getValueAPF().compare(*R) == APFloat::cmpEqual;}
 
-  struct LocalOpts : public BasicBlockPass
+  struct LocalOpts : public FunctionPass
   {
     static char ID;
-    LocalOpts() : BasicBlockPass(ID) {}
+    LocalOpts() : FunctionPass(ID) {}
 
 
     template<class C, class AP>
@@ -206,12 +214,8 @@ namespace
       } else return false;
     }
 
-    virtual bool runOnBasicBlock(BasicBlock &bb) {
+    bool runOnBasicBlock(BasicBlock &bb, OptInfo & optinf) {
       bool modified = false;
-      unsigned constProp = 0;
-      unsigned constFold = 0;
-      unsigned algebraic = 0;
-      unsigned strengthRed = 0;
 
       // Iterate over instructions
       for (BasicBlock::iterator i = bb.begin(), e = bb.end(); i != e; ++i)
@@ -249,7 +253,7 @@ namespace
                 for (Value::use_iterator u = ptr->use_begin(); u != ptr->use_end(); ++u) {
                   if (LoadInst *l = dyn_cast<LoadInst>(*u)) {
                     l->replaceAllUsesWith(val);
-                    constProp++;
+                    optinf.constProp++;
                     modified = true;
                   }
                 }
@@ -261,7 +265,7 @@ namespace
             {
               if (applyIdentity(i, commIdentities<ConstantInt,APInt>(L, R, &zeroAPI, NULL))) {
                 // a + 0 = 0 + a = a
-                algebraic++; modified = true; continue;
+                optinf.algebraic++; modified = true; continue;
               }
             }
             break;
@@ -269,7 +273,7 @@ namespace
             {
               if (applyIdentity(i, commIdentities<ConstantFP,APFloat>(L, R, &zeroAPF, NULL))) {
                 // a + 0 = 0 + a = a
-                algebraic++; modified = true; continue;
+                optinf.algebraic++; modified = true; continue;
               }
             }
             break;
@@ -279,10 +283,10 @@ namespace
               ConstantInt * zeroCI = ConstantInt::get(L->getContext(), zeroAPI);
               if (applyIdentity(i, selfInverse<ConstantInt>(L, R, zeroCI))) {
                 // a - a = 0
-                algebraic++; modified = true; continue;
+                optinf.algebraic++; modified = true; continue;
               } else if (applyIdentity(i, constIdentity<ConstantInt,APInt>(R, L, &zeroAPI, NULL))) {
                 // a - 0 = a
-                algebraic++; modified = true; continue;
+                optinf.algebraic++; modified = true; continue;
               }
             }
             break;
@@ -291,10 +295,10 @@ namespace
               ConstantFP * zeroCF = ConstantFP::get(L->getContext(), zeroAPF);
               if (applyIdentity(i, selfInverse<ConstantFP>(L, R, zeroCF))) {
                 // a - a = 0
-                algebraic++; modified = true; continue;
+                optinf.algebraic++; modified = true; continue;
               } else if (applyIdentity(i, constIdentity<ConstantFP,APFloat>(R, L, &zeroAPF, NULL))) {
                 // a - 0 = a
-                algebraic++; modified = true; continue;
+                optinf.algebraic++; modified = true; continue;
               }
             }
             break;
@@ -303,7 +307,7 @@ namespace
               if (applyIdentity(i, commIdentities<ConstantInt,APInt>(L, R, &oneAPI, &zeroAPI))) {
                 // a * 1 = 1 * a = a
                 // a * 0 = 0 * a = 0
-                algebraic++; modified = true; continue;
+                optinf.algebraic++; modified = true; continue;
               }
             }
             break;
@@ -312,7 +316,7 @@ namespace
               if (applyIdentity(i, commIdentities<ConstantFP,APFloat>(L, R, &oneAPF, &zeroAPF))) {
                 // a * 1 = 1 * a = a
                 // a * 0 = 0 * a = 0
-                algebraic++; modified = true; continue;
+                optinf.algebraic++; modified = true; continue;
               }
             }
             break;
@@ -322,13 +326,13 @@ namespace
               ConstantInt * oneCI = ConstantInt::get(L->getContext(), oneAPI);
               if (applyIdentity(i, selfInverse(L, R, oneCI))) {
                 // a / a = 1
-                algebraic++; modified = true; continue;
+                optinf.algebraic++; modified = true; continue;
               } else if (applyIdentity(i, constIdentity<ConstantInt,APInt>(L, R, NULL, &zeroAPI))) {
                 // 0/a = 0
-                algebraic++; modified = true; continue;
+                optinf.algebraic++; modified = true; continue;
               } else if (applyIdentity(i, constIdentity<ConstantInt,APInt>(R, L, &oneAPI, NULL))) {
                 // a/1 = 1
-                algebraic++; modified = true; continue;
+                optinf.algebraic++; modified = true; continue;
               }
               break;
             }
@@ -337,13 +341,13 @@ namespace
               ConstantFP * oneCF = ConstantFP::get(L->getContext(), oneAPF);
               if (applyIdentity(i, selfInverse(L, R, oneCF))) {
                 // a / a = 1
-                algebraic++; modified = true; continue;
+                optinf.algebraic++; modified = true; continue;
               } else if (applyIdentity(i, constIdentity<ConstantFP,APFloat>(L, R, NULL, &zeroAPF))) {
                 // 0/a = 0
-                algebraic++; modified = true; continue;
+                optinf.algebraic++; modified = true; continue;
               } else if (applyIdentity(i, constIdentity<ConstantFP,APFloat>(R, L, &oneAPF, NULL))) {
                 // a/1 = 1
-                algebraic++; modified = true; continue;
+                optinf.algebraic++; modified = true; continue;
               }
               break;
             }
@@ -353,14 +357,14 @@ namespace
               ConstantInt * zeroCI = ConstantInt::get(L->getContext(), zeroAPI);
               if (applyIdentity(i, selfInverse(L, R, zeroCI))) {
                 // a mod a = 0
-                algebraic++; modified = true; continue;
+                optinf.algebraic++; modified = true; continue;
               } else if (applyIdentity(i, constIdentity<ConstantInt,APInt>(L, R, &oneAPI, &zeroAPI))) {
                 // 0 mod a = 0
                 // 1 mod a = 1
-                algebraic++; modified = true; continue;
+                optinf.algebraic++; modified = true; continue;
               } else if (applyIdentity(i, remIdentity<ConstantInt,APInt>(L, R, &oneAPI, &zeroAPI))) {
                 // a mod 1 = 0
-                algebraic++; modified = true; continue;
+                optinf.algebraic++; modified = true; continue;
               }
               break;
             }
@@ -369,14 +373,14 @@ namespace
               ConstantFP * zeroCF = ConstantFP::get(L->getContext(), zeroAPF);
               if (applyIdentity(i, selfInverse(L, R, zeroCF))) {
                 // a mod a = 0
-                algebraic++; modified = true; continue;
+                optinf.algebraic++; modified = true; continue;
               } else if (applyIdentity(i, constIdentity<ConstantFP,APFloat>(L, R, &oneAPF, &zeroAPF))) {
                 // 0 mod a = 0
                 // 1 mod a = 1
-                algebraic++; modified = true; continue;
+                optinf.algebraic++; modified = true; continue;
               } else if (applyIdentity(i, remIdentity<ConstantFP,APFloat>(L, R, &oneAPF, &zeroAPF))) {
                 // a mod 1 = 0
-                algebraic++; modified = true; continue;
+                optinf.algebraic++; modified = true; continue;
               }
               break;
             }
@@ -389,7 +393,7 @@ namespace
               if (applyIdentity(i, commIdentities<ConstantInt,APInt>(L, R, &allOnes, &zeroAPI))) {
                 // a && T = T && a = a
                 // a && 0 = 0 && a = 0
-                algebraic++; modified = true; continue;
+                optinf.algebraic++; modified = true; continue;
               }
               break;
             }
@@ -398,7 +402,7 @@ namespace
               if (applyIdentity(i, commIdentities<ConstantInt,APInt>(L, R, &zeroAPI, &allOnes))) {
                 // a || 0 = 0 || a = a
                 // a || T = T || a = T
-                algebraic++; modified = true; continue;
+                optinf.algebraic++; modified = true; continue;
               }
               break;
             }
@@ -406,7 +410,7 @@ namespace
             {
               if (applyIdentity(i, commIdentities<ConstantInt,APInt>(L, R, &zeroAPI, NULL))) {
                 // a xor 0 = 0 xor a = a
-                algebraic++; modified = true; continue;
+                optinf.algebraic++; modified = true; continue;
               }
               break;
             }
@@ -417,7 +421,7 @@ namespace
         if (i->getNumOperands() == 2 && isa<Constant>(L) && isa<Constant>(R)) {
           Value * result = evalBinaryOp(op, L, R);
           replaceUsesAndDelete(i,result);
-          constFold++; modified = true; continue;
+          optinf.constFold++; modified = true; continue;
         }
 
 
@@ -429,21 +433,34 @@ namespace
             // Change multiplication by power of 2 to left shift
             if (ConstantInt* LC = dyn_cast<ConstantInt>(L)) {
               if (multiplyToShift(i,LC,R)) {
-                strengthRed++; modified = true; continue;
+                optinf.strengthRed++; modified = true; continue;
               }
             } else if (ConstantInt* RC = dyn_cast<ConstantInt>(R)) {
               if (multiplyToShift(i,RC,L)) {
-                strengthRed++; modified = true; continue;
+                optinf.strengthRed++; modified = true; continue;
               }
             }
         }
       }
 
+      return modified;
+    }
+
+    virtual bool runOnFunction(Function &f) {
+      bool modified = false;
+      OptInfo optinf;
+      optinf.constFold = 0;
+      optinf.constProp = 0;
+      optinf.algebraic = 0;
+      optinf.strengthRed = 0;
+      for (Function::iterator bb = f.begin(); bb != f.end(); bb++) {
+        modified = runOnBasicBlock(*bb, optinf);
+      }
       errs() << "Optimizations performed:\n";
-      errs() << "Constant Propagation: " << constProp << "\n";
-      errs() << "Constant Folding: " << constFold << "\n";
-      errs() << "Algebraic Idenities: " << algebraic << "\n";
-      errs() << "Strength Reduction: " << strengthRed << "\n";
+      errs() << "Constant Propagation: " << optinf.constProp << "\n";
+      errs() << "Constant Folding: " << optinf.constFold << "\n";
+      errs() << "Algebraic Idenities: " << optinf.algebraic << "\n";
+      errs() << "Strength Reduction: " << optinf.strengthRed << "\n";
       return modified;
     }
   };
