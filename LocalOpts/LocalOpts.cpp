@@ -34,7 +34,8 @@ namespace
         }
 
               errs() << *i << "\n";
-        switch (i->getOpcode()) {
+        unsigned op = i->getOpCode();
+        switch (o) {
           default:
             break;
           case Instruction::Store:
@@ -62,6 +63,7 @@ namespace
                 ReplaceInstWithValue(i->getParent()->getInstList(), i, R);
                 modified = true;
               } else if (ConstantInt *RC = dyn_cast<ConstantInt>(R)) {
+                ConstantInt* evalBinaryIntOp()
                 APInt result = LC->getValue() + RC->getValue();
                 i->replaceAllUsesWith(Constant::getIntegerValue(LC->getType(), result));
                 modified = true;
@@ -106,13 +108,98 @@ namespace
   static RegisterPass<LocalOpts> x("LocalOpts", "LocalOpts", false, false);
 }
 
-
 Value* evalBinaryOp(unsigned op, Value* left, Value* right) {
   switch op {
     case Instruction::Add:
-	  return ConstantInt::get(left->Type, 
-							  dyn_cast<ConstantInt*>(left)->getValue() + 
-							  dyn_cast<ConstantInt*>(right)->getValue());
     case Instruction::Sub:
+    case Instruction::Mul:
+    case Instruction::UDiv:
+    case Instruction::SDiv:
+    case Instruction::URem:
+    case Instruction::SRem:
+    case Instruction::Shl:
+    case Instruction::LShr:
+    case Instruction::AShr:
+    case Instruction::And:
+    case Instruction::Or:
+    case Instruction::Xor:
+      return evalBinaryIntOp(op, 
+        dyn_cast<ConstantInt>(left), 
+        dyn_cast<ConstantInt>(right));
+      
+    case Instruction::FAdd:
+    case Instruction::FSub:
+    case Instruction::FMul:
+    case Instruction::FDiv:
+    case Instruction::FRem:
+      return evalBinaryFloatOp(op, 
+        dyn_cast<ConstantFP>(left), 
+        dyn_cast<ConstantFP>(right));
+  }
+}
+
+ConstantInt* evalBinaryIntOp(unsigned op, ConstantInt* left, ConstantInt* right) {
+  switch op {
+    case Instruction::Add:
+      return ConstantInt::get(left->getType(), 
+        left->getValue() + right->getValue());
+    case Instruction::Sub:
+      return ConstantInt::get(left->getType(), 
+        left->getValue() - right->getValue());
+    case Instruction::Mul:
+      return ConstantInt::get(left->getType(), 
+        left->getValue() * right->getValue());
+    case Instruction::UDiv:
+      return ConstantInt::get(left->getType(), 
+        left->getValue().udiv(right->getValue());
+    case Instruction::SDiv:
+      return ConstantInt::get(left->getType(), 
+        left->getValue().sdiv(right->getValue());
+    case Instruction::URem:
+      return ConstantInt::get(left->getType(), 
+        left->getValue().urem(right->getValue());
+    case Instruction::SRem:
+      return ConstantInt::get(left->getType(), 
+        left->getValue().srem(right->getValue());
+    case Instruction::Shl:
+      return ConstantInt::get(left->getType(), 
+        left->getValue().shl(right->getValue());
+    case Instruction::LShr:
+      return ConstantInt::get(left->getType(), 
+        left->getValue().lshr(right->getValue());
+    case Instruction::AShr:
+      return ConstantInt::get(left->getType(), 
+        left->getValue().ashr(right->getValue());
+    case Instruction::And:
+      return ConstantInt::get(left->getType(), 
+        left->getValue() & right->getValue());
+    case Instruction::Or:
+      return ConstantInt::get(left->getType(), 
+        left->getValue() | right->getValue());
+    case Instsruction::Xor:
+      return ConstantInt::get(left->getType(), 
+        left->getValue() ^ right->getValue());
+    }
+}
+
+APFloat::roundingMode rMode = APFloat::roundingMode::rmNearestTiesToEven;
+
+ConstantFP* evalBinaryFloatOp(unsigned op, ConstantFP* left, ConstantFP* right) {
+  switch (op) {
+    case Instruction::FAdd:
+      return ConstantFP::get(left->getContext(), 
+        left->getValue().add(right->getValue(), rMode));
+    case Instruction::FSub:
+      return ConstantFP::get(left->getContext(), 
+        left->getValue().subtract(right->getValue(), rMode));
+    case Instruction::FMul:
+      return ConstantFP::get(left->getContext(), 
+        left->getValue().multiply(right->getValue(), rMode));
+    case Instruction::FDiv:
+      return ConstantFP::get(left->getContext(), 
+        left->getValue().divide(right->getValue(), rMode));
+    case Instruction::FRem:
+      return ConstantFP::get(left->getContext(), 
+        left->getValue().remainder(right->getValue(), rMode));
   }
 }
