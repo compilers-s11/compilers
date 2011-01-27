@@ -160,7 +160,7 @@ namespace
         }
 
         errs() << *i << "\n";
-        unsigned op = i->getOpCode();
+        unsigned op = i->getOpcode();
         // Algebraic identities & constant propagation
         switch (op) {
           default:
