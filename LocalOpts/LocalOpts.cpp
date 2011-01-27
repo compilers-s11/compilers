@@ -318,6 +318,9 @@ namespace
                     L, ConstantInt::get(RC->getType(), lg, false));
                   i->getParent()->getInstList().insertAfter(i, newInst);
                   i->replaceAllUsesWith(newInst);
+                  BasicBlock::iterator j = i;
+                  ++i;
+                  j->eraseFromParent();
                   //i++;
                   //i->getParent()->getInstList().remove(i);
       //            i->replaceAllUsesWith(newInst);
