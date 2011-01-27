@@ -4,12 +4,14 @@
 #include "llvm/Instruction.h"
 #include "llvm/Instructions.h"
 #include "llvm/Constants.h"
+#include "llvm/ADT/APFloat.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 
 #include <ostream>
 
 using namespace llvm;
 
+APFloat::roundingMode rMode = APFloat::rmNearestTiesToEven;
 namespace
 {
 
@@ -17,7 +19,7 @@ namespace
   {
     static char ID;
     LocalOpts() : BasicBlockPass(ID) {}
-
+   
     void propagateConstant(Instruction *i, Value * val) {
       i->replaceAllUsesWith(val);
     }
@@ -47,6 +49,105 @@ namespace
       return false;
     }
 
+    Value * selfInverse (Value *L, Value *R, uint64_t zero) {
+      if (cast<Instruction>(L)->isIdenticalTo(cast<Instruction>(R))) {
+        return ConstantInt::get(L->getContext(), APInt(32, zero));
+      } else return NULL;
+    }
+
+    ConstantInt* evalBinaryIntOp(unsigned op, ConstantInt * left, ConstantInt * right) {
+      switch (op) {
+        case Instruction::Add:
+          return ConstantInt::get(left->getContext(), 
+            left->getValue() + right->getValue());
+        case Instruction::Sub:
+          return ConstantInt::get(left->getContext(), 
+            left->getValue() - right->getValue());
+        case Instruction::Mul:
+          return ConstantInt::get(left->getContext(), 
+            left->getValue() * right->getValue());
+        case Instruction::UDiv:
+          return ConstantInt::get(left->getContext(), 
+            left->getValue().udiv(right->getValue()));
+        case Instruction::SDiv:
+          return ConstantInt::get(left->getContext(), 
+            left->getValue().sdiv(right->getValue()));
+        case Instruction::URem:
+          return ConstantInt::get(left->getContext(), 
+            left->getValue().urem(right->getValue()));
+        case Instruction::SRem:
+          return ConstantInt::get(left->getContext(), 
+            left->getValue().srem(right->getValue()));
+        case Instruction::Shl:
+          return ConstantInt::get(left->getContext(), 
+            left->getValue().shl(right->getValue()));
+        case Instruction::LShr:
+          return ConstantInt::get(left->getContext(), 
+            left->getValue().lshr(right->getValue()));
+        case Instruction::AShr:
+          return ConstantInt::get(left->getContext(), 
+            left->getValue().ashr(right->getValue()));
+        case Instruction::And:
+          return ConstantInt::get(left->getContext(), 
+            left->getValue() & right->getValue());
+        case Instruction::Or:
+          return ConstantInt::get(left->getContext(), 
+            left->getValue() | right->getValue());
+        case Instruction::Xor:
+          return ConstantInt::get(left->getContext(), 
+            left->getValue() ^ right->getValue());
+        }
+    }
+
+    ConstantFP* evalBinaryFloatOp(unsigned op, ConstantFP* left, ConstantFP* right) {
+      APFloat lhs = left->getValueAPF();
+      APFloat rhs = right->getValueAPF();
+      switch (op) {
+        case Instruction::FAdd:
+            lhs.add(rhs, rMode);
+        case Instruction::FSub:
+            lhs.subtract(rhs, rMode);
+        case Instruction::FMul:
+            lhs.multiply(rhs, rMode);
+        case Instruction::FDiv:
+            lhs.divide(rhs, rMode);
+        case Instruction::FRem:
+            lhs.remainder(rhs);
+      }
+      return ConstantFP::get(left->getContext(), lhs);
+    }
+
+    Value* evalBinaryOp(unsigned op, Value* left, Value* right) {
+      switch (op) {
+        case Instruction::Add:
+        case Instruction::Sub:
+        case Instruction::Mul:
+        case Instruction::UDiv:
+        case Instruction::SDiv:
+        case Instruction::URem:
+        case Instruction::SRem:
+        case Instruction::Shl:
+        case Instruction::LShr:
+        case Instruction::AShr:
+        case Instruction::And:
+        case Instruction::Or:
+        case Instruction::Xor:
+          return evalBinaryIntOp(op, 
+            dyn_cast<ConstantInt>(left), 
+            dyn_cast<ConstantInt>(right));
+      
+        case Instruction::FAdd:
+        case Instruction::FSub:
+        case Instruction::FMul:
+        case Instruction::FDiv:
+        case Instruction::FRem:
+          return evalBinaryFloatOp(op, 
+            dyn_cast<ConstantFP>(left), 
+            dyn_cast<ConstantFP>(right));
+          return left;
+      }
+    }
+
     virtual bool runOnBasicBlock(BasicBlock &bb) {
       bool modified = false;
       // Iterate over instructions
@@ -60,6 +161,7 @@ namespace
 
         errs() << *i << "\n";
         unsigned op = i->getOpCode();
+        // Algebraic identities & constant propagation
         switch (op) {
           default:
             break;
@@ -88,27 +190,27 @@ namespace
               if (constIdentities((unsigned)Instruction::Add, L, R, &zero, NULL, val)) {
                 i->replaceAllUsesWith(val);
                 modified = true;
-              } else if (ConstantInt* LC = dyn_cast<ConstantInt>(L)
-                         && ConstantInt* RC = dyn_cast<ConstantInt>(R)) {
-                ConstantInt* result = evalBinaryIntOp(op, LC, RC);
-                i->replaceAllUsesWith(val);
-                modified = true;
               }
             }
             break;
           case Instruction::FAdd:
+            break;
           case Instruction::Sub:
             // Algebraic identities
             {
-              Value * val;
+              Value * val = NULL;
               uint64_t zero = 0;
-              if (constIdentities((unsigned)Instruction::Sub, L, R, &zero, NULL, val)) {
+              if (Value * changedVal = selfInverse(L, R, zero)) {
+                i->replaceAllUsesWith(changedVal);
+                modified = true;
+              } else if (constIdentities((unsigned)Instruction::Sub, L, R, &zero, NULL, val)) {
                 i->replaceAllUsesWith(val);
                 modified = true;
               }
             }
             break;
           case Instruction::FSub:
+            break;
           case Instruction::Mul:
             // Algebraic identities
             {
@@ -122,9 +224,19 @@ namespace
             }
             break;
           case Instruction::FMul:
+            break;
           case Instruction::UDiv:
           case Instruction::SDiv:
           case Instruction::FDiv:
+            {
+              Value * val = NULL;
+              uint64_t one = 1;
+              if (Value * changedVal = selfInverse(L, R, one)) {
+                i->replaceAllUsesWith(changedVal);
+                modified = true;
+              }
+              break;
+            }
           case Instruction::URem:
           case Instruction::SRem:
           case Instruction::FRem:
@@ -143,144 +255,48 @@ namespace
         
         // Constant folding
         if (!modified) {
-          switch (op) {
-            case Instruction::Add:
-            case Instruction::Sub:
-            case Instruction::Mul:
-            case Instruction::UDiv:
-            case Instruction::SDiv:
-            case Instruction::URem:
-            case Instruction::SRem:
-            case Instruction::Shl:
-            case Instruction::LShr:
-            case Instruction::AShr:
-            case Instruction::And:
-            case Instruction::Or:
-            case Instruction::Xor:
-              if (ConstantInt* LC = dyn_cast<ConstantInt>(L)
-                  && ConstantInt* RC = dyn_cast<ConstantInt>(R)) {
-                ConstantInt* result = evalBinaryIntOp(op, LC, RC);
-                i->replaceAllUsesWith(result);
-                modified = true;
-              }
-              break;
-              
-            case Instruction::FAdd:
-            case Instruction::FSub:
-            case Instruction::FMul:
-            case Instruction::FDiv:
-            case Instruction::FRem:
-              if (ConstantFP* LC = dyn_cast<ConstantFP>(L)
-                  && ConstantFP* RC = dyn_cast<ConstantFP>(R)) {
-                ConstantInt* result = evalBinaryFloatOp(op, LC, RC);
-                i->replaceAllUsesWith(result);
-                modified = true;
-              }
-              break;
-              
+          if (i->getNumOperands() == 2 && isa<Constant>(L) && isa<Constant>(R)) {
+            Value * result = evalBinaryOp(op, L, R);
+            i->replaceAllUsesWith(result);
+            modified = true;
           }
         }
-        //errs() << *i << "\n";
-      }
-      
-      // Strength reduction
-      if (!modified) {
-        switch (op) {
-          case Instruction::Mul:
-            // multiplication by power of 2
-            if (ConstantInt* LC = dyn_cast<ConstantInt>(L)) {
-              const APInt left = LC->getValue();
-              if (left.isPowerOf2()) {
-                unsigned lg = left.logBase2();
-                BinaryOperator* newInst = BinaryOperator::Create(
-                  Instruction::Shl, 
-                  R, ConstantInt::get(LC->getType(), lg, false));
-                ReplaceInstWithInst(i->getParent()->getInstList(), i, newInst);
-                modified = true;
+        
+        // Strength reduction
+        if (!modified) {
+          switch (op) {
+            case Instruction::Mul:
+              // multiplication by power of 2
+              if (ConstantInt* LC = dyn_cast<ConstantInt>(L)) {
+                const APInt left = LC->getValue();
+                if (left.isPowerOf2()) {
+                  unsigned lg = left.logBase2();
+                  BinaryOperator* newInst = BinaryOperator::Create(
+                    Instruction::Shl, 
+                    R, ConstantInt::get(LC->getType(), lg, false));
+                  ReplaceInstWithInst(i->getParent()->getInstList(), i, newInst);
+                  modified = true;
+                }
+              } else if (ConstantInt* RC = dyn_cast<ConstantInt>(R)) {
+                const APInt right = RC->getValue();
+                if (right.isPowerOf2()) {
+                  unsigned lg = right.logBase2();
+                  BinaryOperator* newInst = BinaryOperator::Create(
+                    Instruction::Shl,
+                    R, ConstantInt::get(LC->getType(), lg, false));
+                  ReplaceInstWithInst(i->getParent()->getInstList(), i, newInst);
+                  modified = true;
+                }
               }
-            } else if (ConstantInt* RC = dyn_cast<ConstantInt>(R)) {
-              const APInt right = RC->getValue();
-              if (right.isPowerOf2()) {
-                unsigned lg = right.logBase2();
-                BinaryOperator* newInst = BinaryOperator::Create(
-                  Instruction::Shl,
-                  R, ConstantInt::get(LC->getType(), lg, false));
-                ReplaceInstWithInst(i->getParent()->getInstList(), i, newInst);
-                modified = true;
-              }
-            }
+          }
         }
       }
+      
+      
       return modified;
     }
   };
 
   char LocalOpts::ID = 0;
   static RegisterPass<LocalOpts> x("LocalOpts", "LocalOpts", false, false);
-}
-
-ConstantInt* evalBinaryIntOp(unsigned op, ConstantInt* left_v, ConstantInt* right_v) {
-  switch op {
-    case Instruction::Add:
-      return ConstantInt::get(left->getContext(), 
-        left->getValue() + right->getValue());
-    case Instruction::Sub:
-      return ConstantInt::get(left->getContext(), 
-        left->getValue() - right->getValue());
-    case Instruction::Mul:
-      return ConstantInt::get(left->getContext(), 
-        left->getValue() * right->getValue());
-    case Instruction::UDiv:
-      return ConstantInt::get(left->getContext(), 
-        left->getValue().udiv(right->getValue());
-    case Instruction::SDiv:
-      return ConstantInt::get(left->getContext(), 
-        left->getValue().sdiv(right->getValue());
-    case Instruction::URem:
-      return ConstantInt::get(left->getContext(), 
-        left->getValue().urem(right->getValue());
-    case Instruction::SRem:
-      return ConstantInt::get(left->getContext(), 
-        left->getValue().srem(right->getValue());
-    case Instruction::Shl:
-      return ConstantInt::get(left->getContext(), 
-        left->getValue().shl(right->getValue());
-    case Instruction::LShr:
-      return ConstantInt::get(left->getContext(), 
-        left->getValue().lshr(right->getValue());
-    case Instruction::AShr:
-      return ConstantInt::get(left->getContext(), 
-        left->getValue().ashr(right->getValue());
-    case Instruction::And:
-      return ConstantInt::get(left->getContext(), 
-        left->getValue() & right->getValue());
-    case Instruction::Or:
-      return ConstantInt::get(left->getContext(), 
-        left->getValue() | right->getValue());
-    case Instsruction::Xor:
-      return ConstantInt::get(left->getContext(), 
-        left->getValue() ^ right->getValue());
-    }
-}
-
-APFloat::roundingMode rMode = APFloat::roundingMode::rmNearestTiesToEven;
-
-ConstantFP* evalBinaryFloatOp(unsigned op, ConstantFP* left, ConstantFP* right) {
-  switch (op) {
-    case Instruction::FAdd:
-      return ConstantFP::get(left->getContext(), 
-        left->getValue().add(right->getValue(), rMode));
-    case Instruction::FSub:
-      return ConstantFP::get(left->getContext(), 
-        left->getValue().subtract(right->getValue(), rMode));
-    case Instruction::FMul:
-      return ConstantFP::get(left->getContext(), 
-        left->getValue().multiply(right->getValue(), rMode));
-    case Instruction::FDiv:
-      return ConstantFP::get(left->getContext(), 
-        left->getValue().divide(right->getValue(), rMode));
-    case Instruction::FRem:
-      return ConstantFP::get(left->getContext(), 
-        left->getValue().remainder(right->getValue(), rMode));
-  }
 }
