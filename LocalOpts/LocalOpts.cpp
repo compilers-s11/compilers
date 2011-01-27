@@ -160,7 +160,7 @@ namespace
         }
 
         errs() << *i << "\n";
-        unsigned op = i->getOpCode();
+        unsigned op = i->getOpcode();
         // Algebraic identities & constant propagation
         switch (op) {
           default:
@@ -283,7 +283,7 @@ namespace
                   unsigned lg = right.logBase2();
                   BinaryOperator* newInst = BinaryOperator::Create(
                     Instruction::Shl,
-                    R, ConstantInt::get(LC->getType(), lg, false));
+                    R, ConstantInt::get(RC->getType(), lg, false));
                   ReplaceInstWithInst(i->getParent()->getInstList(), i, newInst);
                   modified = true;
                 }
