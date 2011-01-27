@@ -31,9 +31,11 @@ The number of instructions can be useful in estimating the amount of time it may
 We created a per-function pass (to facilitate constant propagation within the function) and iterated through each instruction, dispatching on its instruction type with a \texttt{switch} statement.
 \begin{enumerate}
 \item \textbf{Constant Propagation} When a constant was stored in a variable, we found places where it was being loaded into a register, and replaced all uses of the register with the constant by going through its use list. 
-\item \textbf{Algebraic Identities} 
-\item \textbf{Constant Folding} stuff
-\item \textbf{Strength Reduction} stuff
+\item \textbf{Algebraic Identities} (Salil)
+\item \textbf{Constant Folding} When both operands of an arithmetic expression were constants, we replaced the instruction with a value resulting from computing the operation statically. We wrote  functions taking the operation and operands, one for integer operations and another for floating point operations, to produce this value and used a common function to insert this into the function.
+
+We note that floating point constant folding can produce exceptional conditions. We did not implement any mechanism for notifying the user of these conditions or aborting the constant folding operation in this condition.
+\item \textbf{Strength Reduction} We detected uses of the multiplication operation on integers. When one of the operands was a power of two, we transformed the instruction into an equivalent left shift instruction, taking the log of that operand as the second argument.
 \end{enumerate}
 \section{Source Listing}
 \begin{verbatim}
