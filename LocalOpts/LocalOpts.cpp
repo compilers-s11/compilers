@@ -283,7 +283,7 @@ namespace
                   unsigned lg = right.logBase2();
                   BinaryOperator* newInst = BinaryOperator::Create(
                     Instruction::Shl,
-                    R, ConstantInt::get(LC->getType(), lg, false));
+                    L, ConstantInt::get(RC->getType(), lg, false));
                   ReplaceInstWithInst(i->getParent()->getInstList(), i, newInst);
                   modified = true;
                 }
