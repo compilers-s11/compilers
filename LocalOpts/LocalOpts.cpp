@@ -33,27 +33,23 @@ namespace
 
 
     template<class C, class AP>
-    bool constIdentities (Value *L, Value * R, AP *identity, AP *zero, Value * &retval) {
+    Value * constIdentities (Value *L, Value * R, AP *identity, AP *zero) {
       if (C *LC = dyn_cast<C>(L)) {
         if (identity && valEquals<C,AP>(LC,identity)) {
-          retval = R;
-          return true;
+          return R;
         } else if (zero && valEquals<C,AP>(LC,zero)) {
-          retval = C::get(LC->getContext(), *zero);
-          return true;
+          return C::get(LC->getContext(), *zero);
         }
       } 
       
       if (C *RC = dyn_cast<C>(R)) {
         if (identity && valEquals<C,AP>(RC,identity)) {
-          retval = L;
-          return true;
+          return L;
         } else if (zero && valEquals<C,AP>(RC,zero)) {
-          retval = C::get(RC->getContext(), *zero);
-          return true;
+          return C::get(RC->getContext(), *zero);
         }
       }
-      return false;
+      return NULL;
     }
 
    
@@ -201,20 +197,18 @@ namespace
           case Instruction::Add:
             // Algebraic identities
             {
-              Value * val;
               APInt zeroAP = APInt(cast<IntegerType>(i->getType())->getBitWidth(), 0);
-              if (constIdentities<ConstantInt,APInt>(L, R, &zeroAP, NULL, val)) {
-                i->replaceAllUsesWith(val);
+              if (Value * changedVal = constIdentities<ConstantInt,APInt>(L, R, &zeroAP, NULL)) {
+                i->replaceAllUsesWith(changedVal);
                 modified = iModified = true;
               }
             }
             break;
           case Instruction::FAdd:
             {
-              Value * val;
               APFloat zeroAP = APFloat((float)0);
-              if (constIdentities<ConstantFP,APFloat>(L, R, &zeroAP, NULL, val)) {
-                i->replaceAllUsesWith(val);
+              if (Value * changedVal = constIdentities<ConstantFP,APFloat>(L, R, &zeroAP, NULL)) {
+                i->replaceAllUsesWith(changedVal);
                 modified = iModified = true;
               }
             }
@@ -222,14 +216,13 @@ namespace
           case Instruction::Sub:
             // Algebraic identities
             {
-              Value * val = NULL;
               APInt zeroAP = APInt(cast<IntegerType>(i->getType())->getBitWidth(), 0);
               ConstantInt * zeroC = ConstantInt::get(L->getContext(), zeroAP);
               if (Value * changedVal = selfInverse<ConstantInt>(L, R, zeroC)) {
                 i->replaceAllUsesWith(changedVal);
                 modified = iModified = true;
-              } else if (constIdentities<ConstantInt,APInt>(L, R, &zeroAP, NULL, val)) {
-                i->replaceAllUsesWith(val);
+              } else if (Value * changedVal = constIdentities<ConstantInt,APInt>(L, R, &zeroAP, NULL)) {
+                i->replaceAllUsesWith(changedVal);
                 modified = iModified = true;
               }
             }
@@ -239,11 +232,10 @@ namespace
           case Instruction::Mul:
             // Algebraic identities
             {
-              Value * val;
               APInt zeroAP = APInt(cast<IntegerType>(i->getType())->getBitWidth(), 0);
               APInt oneAP = APInt(cast<IntegerType>(i->getType())->getBitWidth(), 1);
-              if (constIdentities<ConstantInt,APInt>(L, R, &oneAP, &zeroAP, val)) {
-                i->replaceAllUsesWith(val);
+              if (Value * changedVal = constIdentities<ConstantInt,APInt>(L, R, &oneAP, &zeroAP)) {
+                i->replaceAllUsesWith(changedVal);
                 modified = iModified = true;
               }
             }
@@ -253,7 +245,6 @@ namespace
           case Instruction::UDiv:
           case Instruction::SDiv:
             {
-              Value * val = NULL;
               ConstantInt * one = ConstantInt::get(L->getContext(), APInt(cast<IntegerType>(i->getType())->getBitWidth(), 1));
               if (Value * changedVal = selfInverse(L, R, one)) {
                 i->replaceAllUsesWith(changedVal);
