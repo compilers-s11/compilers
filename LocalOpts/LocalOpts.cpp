@@ -22,6 +22,31 @@ namespace
       i->replaceAllUsesWith(val);
     }
 
+    bool constIdentities (unsigned opcode, Value *L, Value * R, uint64_t *identity, uint64_t *zero, Value * &retval) {
+      if (ConstantInt *LC = dyn_cast<ConstantInt>(L)) {
+        if (identity && LC->equalsInt(*identity)) {
+          retval = L;
+          return true;
+        } else if (zero && (LC->equalsInt(*zero))) {
+          retval = Constant::getIntegerValue(LC->getType(), APInt(LC->getBitWidth(), *zero));
+          return true;
+        } else if (ConstantInt *RC = dyn_cast<ConstantInt>(R)) {
+          APInt result = LC->getValue() + RC->getValue();
+          retval = Constant::getIntegerValue(LC->getType(), result);
+          return true;
+        }
+      } else if (ConstantInt *RC = dyn_cast<ConstantInt>(R)) {
+        if (identity && RC->equalsInt(*identity)) {
+          retval = L;
+          return true;
+        } else if (zero && (RC->equalsInt(*zero))) {
+          retval = Constant::getIntegerValue(RC->getType(), APInt(RC->getBitWidth(), *zero));
+          return true;
+        }
+      }
+      return false;
+    }
+
     virtual bool runOnBasicBlock(BasicBlock &bb) {
       bool modified = false;
       // Iterate over instructions
@@ -35,7 +60,7 @@ namespace
 
               errs() << *i << "\n";
         unsigned op = i->getOpCode();
-        switch (o) {
+        switch (op) {
           default:
             break;
           case Instruction::Store:
@@ -51,34 +76,50 @@ namespace
                     propagateConstant(l, val);
                     modified = true;
                   }
-
                 }
               }
             }
             break;
           case Instruction::Add:
             // Algebraic identities
-            if (ConstantInt *LC = dyn_cast<ConstantInt>(L)) {
-              if (LC->isZero()) {
-                ReplaceInstWithValue(i->getParent()->getInstList(), i, R);
+            {
+              Value * val;
+              uint64_t zero = 0;
+              if (constIdentities((unsigned)Instruction::Add, L, R, &zero, NULL, val)) {
+                i->replaceAllUsesWith(val);
                 modified = true;
-              } else if (ConstantInt *RC = dyn_cast<ConstantInt>(R)) {
-                ConstantInt* evalBinaryIntOp()
-                APInt result = LC->getValue() + RC->getValue();
-                i->replaceAllUsesWith(Constant::getIntegerValue(LC->getType(), result));
-                modified = true;
-              }
-            } else if (ConstantInt *RC = dyn_cast<ConstantInt>(R)) {
-              if (RC->isZero()) {
-                ReplaceInstWithValue(i->getParent()->getInstList(), i, L);
-                modified = true;
+              } else if (ConstantInt* LC = dyn_cast<ConstantInt>(L)
+                         && ConstantInt* RC = dyn_cast<ConstantInt>(R)) {
+                ConstantInt* result = evalBinaryIntOp(op, LC, RC);
+                i->replaceAllUsesWith(val);
               }
             }
             break;
           case Instruction::FAdd:
           case Instruction::Sub:
+            // Algebraic identities
+            {
+              Value * val;
+              uint64_t zero = 0;
+              if (constIdentities((unsigned)Instruction::Sub, L, R, &zero, NULL, val)) {
+                i->replaceAllUsesWith(val);
+                modified = true;
+              }
+            }
+            break;
           case Instruction::FSub:
           case Instruction::Mul:
+            // Algebraic identities
+            {
+              Value * val;
+              uint64_t zero = 0;
+              uint64_t one = 1;
+              if (constIdentities((unsigned)Instruction::Sub, L, R, &one, &zero, val)) {
+                i->replaceAllUsesWith(val);
+                modified = true;
+              }
+            }
+            break;
           case Instruction::FMul:
           case Instruction::UDiv:
           case Instruction::SDiv:
@@ -138,7 +179,7 @@ Value* evalBinaryOp(unsigned op, Value* left, Value* right) {
   }
 }
 
-ConstantInt* evalBinaryIntOp(unsigned op, ConstantInt* left, ConstantInt* right) {
+ConstantInt* evalBinaryIntOp(unsigned op, Value* left_v, Value* right_v) {
   switch op {
     case Instruction::Add:
       return ConstantInt::get(left->getType(), 
