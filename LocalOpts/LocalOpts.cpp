@@ -33,6 +33,7 @@ namespace
           R = i->getOperand(1);
         }
 
+              errs() << *i << "\n";
         switch (i->getOpcode()) {
           default:
             break;
@@ -62,7 +63,8 @@ namespace
                 modified = true;
               } else if (ConstantInt *RC = dyn_cast<ConstantInt>(R)) {
                 APInt result = LC->getValue() + RC->getValue();
-                ReplaceInstWithValue(i->getParent()->getInstList(), i, Constant::getIntegerValue(LC->getType(), result));
+                i->replaceAllUsesWith(Constant::getIntegerValue(LC->getType(), result));
+                modified = true;
               }
             } else if (ConstantInt *RC = dyn_cast<ConstantInt>(R)) {
               if (RC->isZero()) {
