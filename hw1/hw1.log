@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.1415926-1.40.10 (TeX Live 2009) (format=pdflatex 2009.11.7)  27 JAN 2011 02:11
+This is pdfTeX, Version 3.1415926-1.40.10 (TeX Live 2009) (format=pdflatex 2009.11.7)  27 JAN 2011 02:29
 entering extended mode
  \write18 enabled.
  %&-line parsing enabled.
@@ -167,24 +167,25 @@ LaTeX Font Info:    Try loading font information for U+msb on input line 19.
 File: umsb.fd 2009/06/22 v3.00 AMS symbols B
 ) [1
 
-{/usr/local/texlive/2009/texmf-var/fonts/map/pdftex/updmap/pdftex.map}] (./hw1.
-aux) ) 
+{/usr/local/texlive/2009/texmf-var/fonts/map/pdftex/updmap/pdftex.map}] [2] (./
+hw1.aux) ) 
 Here is how much of TeX's memory you used:
- 1570 strings out of 493848
- 20507 string characters out of 3149207
- 70348 words of memory out of 3000000
- 4871 multiletter control sequences out of 15000+200000
- 7911 words of font info for 31 fonts, out of 3000000 for 9000
+ 1571 strings out of 493848
+ 20522 string characters out of 3149207
+ 71348 words of memory out of 3000000
+ 4872 multiletter control sequences out of 15000+200000
+ 8218 words of font info for 32 fonts, out of 3000000 for 9000
  714 hyphenation exceptions out of 8191
- 25i,6n,24p,234b,199s stack positions out of 5000i,500n,10000p,200000b,50000s
-</usr/local/texlive/2009/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx12
-.pfb></usr/local/texlive/2009/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.p
-fb></usr/local/texlive/2009/texmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pfb
-></usr/local/texlive/2009/texmf-dist/fonts/type1/public/amsfonts/cm/cmr17.pfb><
-/usr/local/texlive/2009/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt12.pfb>
-Output written on hw1.pdf (1 page, 51959 bytes).
+ 25i,6n,24p,280b,199s stack positions out of 5000i,500n,10000p,200000b,50000s
+</usr/local/texlive/2009/texmf-dist/fonts/type1/public/amsfonts/cm/cm
+bx12.pfb></usr/local/texlive/2009/texmf-dist/fonts/type1/public/amsfonts/cm/cmr
+10.pfb></usr/local/texlive/2009/texmf-dist/fonts/type1/public/amsfonts/cm/cmr12
+.pfb></usr/local/texlive/2009/texmf-dist/fonts/type1/public/amsfonts/cm/cmr17.p
+fb></usr/local/texlive/2009/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt12.pf
+b>
+Output written on hw1.pdf (2 pages, 60281 bytes).
 PDF statistics:
- 26 PDF objects out of 1000 (max. 8388607)
+ 29 PDF objects out of 1000 (max. 8388607)
  0 named destinations out of 1000 (max. 500000)
  1 words of extra memory for PDF output out of 10000 (max. 10000000)
 

@@ -19,12 +19,22 @@ cyrus@cmu.edu
 \maketitle
 \section{Using FunctionInfo Results}
 \begin{enumerate}
-\item 1
-\item 2
-\item 3
+\item Function signatures, as used for forward references, are represented as functions within the LLVM IR. Since signatures have no body, they have zero basic blocks.
+\item The number of call sites a function has is important in determining whether inlining it will increase the size of the assembly unacceptably. If this number is small, inlining can occur safely. The threshold is higher for functions with fewer instructions.
+\item The number of call sites can be a heuristic indicator of the relative importance of a function in a program. The number of basic blocks can similarly serve as a heuristic measure of the complexity of control flow through a function. 
+
+If the number of basic blocks is small, it may be fruitful to use asymptotically inefficient optimization techniques because the actual magnitude of time it takes remains small.
+
+The number of instructions can be useful in estimating the amount of time it may take to run a pass  on the function.
 \end{enumerate}
 \section{Implementation}
-We did stuff.
+We created a per-function pass (to facilitate constant propagation within the function) and iterated through each instruction, dispatching on its instruction type with a \texttt{switch} statement.
+\begin{enumerate}
+\item \textbf{Constant Propagation} When a constant was stored in a variable, we found places where it was being loaded into a register, and replaced all uses of the register with the constant by going through its use list. 
+\item \textbf{Algebraic Identities} 
+\item \textbf{Constant Folding} stuff
+\item \textbf{Strength Reduction} stuff
+\end{enumerate}
 \section{Source Listing}
 \begin{verbatim}
 stuff
