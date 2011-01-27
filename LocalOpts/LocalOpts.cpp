@@ -150,9 +150,11 @@ namespace
 
     virtual bool runOnBasicBlock(BasicBlock &bb) {
       bool modified = false;
+      bool iModified;
       // Iterate over instructions
       for (BasicBlock::iterator i = bb.begin(), e = bb.end(); i != e; ++i)
       {
+        iModified = false;
         Value* L; Value* R;
         if (i->getNumOperands() == 2) {
           L = i->getOperand(0);
@@ -176,7 +178,7 @@ namespace
                 for (Value::use_iterator u = ptr->use_begin(); u != ptr->use_end(); ++u) {
                   if (LoadInst *l = dyn_cast<LoadInst>(*u)) {
                     propagateConstant(l, val);
-                    modified = true;
+                    modified = iModified = true;
                   }
                 }
               }
@@ -189,7 +191,7 @@ namespace
               uint64_t zero = 0;
               if (constIdentities((unsigned)Instruction::Add, L, R, &zero, NULL, val)) {
                 i->replaceAllUsesWith(val);
-                modified = true;
+                modified = iModified = true;
               }
             }
             break;
@@ -202,10 +204,10 @@ namespace
               uint64_t zero = 0;
               if (Value * changedVal = selfInverse(L, R, zero)) {
                 i->replaceAllUsesWith(changedVal);
-                modified = true;
+                modified = iModified = true;
               } else if (constIdentities((unsigned)Instruction::Sub, L, R, &zero, NULL, val)) {
                 i->replaceAllUsesWith(val);
-                modified = true;
+                modified = iModified = true;
               }
             }
             break;
@@ -219,7 +221,7 @@ namespace
               uint64_t one = 1;
               if (constIdentities((unsigned)Instruction::Sub, L, R, &one, &zero, val)) {
                 i->replaceAllUsesWith(val);
-                modified = true;
+                modified = iModified = true;
               }
             }
             break;
@@ -233,7 +235,7 @@ namespace
               uint64_t one = 1;
               if (Value * changedVal = selfInverse(L, R, one)) {
                 i->replaceAllUsesWith(changedVal);
-                modified = true;
+                modified = iModified = true;
               }
               break;
             }
@@ -254,16 +256,16 @@ namespace
         }
         
         // Constant folding
-        if (!modified) {
+        if (!iModified) {
           if (i->getNumOperands() == 2 && isa<Constant>(L) && isa<Constant>(R)) {
             Value * result = evalBinaryOp(op, L, R);
             i->replaceAllUsesWith(result);
-            modified = true;
+            modified = iModified = true;
           }
         }
         
         // Strength reduction
-        if (!modified) {
+        if (!iModified) {
           switch (op) {
             case Instruction::Mul:
               // multiplication by power of 2
@@ -275,7 +277,7 @@ namespace
                     Instruction::Shl, 
                     R, ConstantInt::get(LC->getType(), lg, false));
                   ReplaceInstWithInst(i->getParent()->getInstList(), i, newInst);
-                  modified = true;
+                  modified = iModified = true;
                 }
               } else if (ConstantInt* RC = dyn_cast<ConstantInt>(R)) {
                 const APInt right = RC->getValue();
@@ -285,7 +287,7 @@ namespace
                     Instruction::Shl,
                     L, ConstantInt::get(RC->getType(), lg, false));
                   ReplaceInstWithInst(i->getParent()->getInstList(), i, newInst);
-                  modified = true;
+                  modified = iModified = true;
                 }
               }
           }
