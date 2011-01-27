@@ -27,9 +27,6 @@ namespace
     static char ID;
     LocalOpts() : BasicBlockPass(ID) {}
    
-    void propagateConstant(Instruction *i, Value * val) {
-      i->replaceAllUsesWith(val);
-    }
 
     template<class C, class AP>
     Value * constIdentity (Value *L, Value * R, AP *identity, AP *zero) {
@@ -61,6 +58,14 @@ namespace
       } else return NULL;
     }
 
+
+    void replaceUsesAndDelete(BasicBlock::iterator &i, Value * val) {
+      i->replaceAllUsesWith(val);
+      BasicBlock::iterator j = i;
+      ++i;
+      j->eraseFromParent();
+      --i;
+    }
 
     ConstantInt* evalBinaryIntOp(unsigned op, ConstantInt * left, ConstantInt * right) {
       switch (op) {
@@ -192,7 +197,7 @@ namespace
                 errs() << "Constant\n";
                 for (Value::use_iterator u = ptr->use_begin(); u != ptr->use_end(); ++u) {
                   if (LoadInst *l = dyn_cast<LoadInst>(*u)) {
-                    propagateConstant(l, val);
+                    l->replaceAllUsesWith(val);
                     modified = iModified = true;
                   }
                 }
@@ -203,7 +208,7 @@ namespace
             // Algebraic identities
             {
               if (Value * changedVal = commIdentities<ConstantInt,APInt>(L, R, &zeroAPI, NULL)) {
-                i->replaceAllUsesWith(changedVal);
+                replaceUsesAndDelete(i, changedVal);
                 modified = iModified = true;
               }
             }
@@ -211,7 +216,7 @@ namespace
           case Instruction::FAdd:
             {
               if (Value * changedVal = commIdentities<ConstantFP,APFloat>(L, R, &zeroAPF, NULL)) {
-                i->replaceAllUsesWith(changedVal);
+                replaceUsesAndDelete(i, changedVal);
                 modified = iModified = true;
               }
             }
@@ -221,10 +226,10 @@ namespace
             {
               ConstantInt * zeroCI = ConstantInt::get(L->getContext(), zeroAPI);
               if (Value * changedVal = selfInverse<ConstantInt>(L, R, zeroCI)) {
-                i->replaceAllUsesWith(changedVal);
+                replaceUsesAndDelete(i,changedVal);
                 modified = iModified = true;
               } else if (Value * changedVal = commIdentities<ConstantInt,APInt>(L, R, &zeroAPI, NULL)) {
-                i->replaceAllUsesWith(changedVal);
+                replaceUsesAndDelete(i,changedVal);
                 modified = iModified = true;
               }
             }
@@ -233,10 +238,10 @@ namespace
             {
               ConstantFP * zeroCF = ConstantFP::get(L->getContext(), zeroAPF);
               if (Value * changedVal = selfInverse<ConstantFP>(L, R, zeroCF)) {
-                i->replaceAllUsesWith(changedVal);
+                replaceUsesAndDelete(i,changedVal);
                 modified = iModified = true;
               } else if (Value * changedVal = commIdentities<ConstantFP,APFloat>(L, R, &zeroAPF, NULL)) {
-                i->replaceAllUsesWith(changedVal);
+                replaceUsesAndDelete(i,changedVal);
                 modified = iModified = true;
               }
             }
@@ -244,7 +249,7 @@ namespace
           case Instruction::Mul:
             {
               if (Value * changedVal = commIdentities<ConstantInt,APInt>(L, R, &oneAPI, &zeroAPI)) {
-                i->replaceAllUsesWith(changedVal);
+                replaceUsesAndDelete(i,changedVal);
                 modified = iModified = true;
               }
             }
@@ -252,7 +257,7 @@ namespace
           case Instruction::FMul:
             {
               if (Value * changedVal = commIdentities<ConstantFP,APFloat>(L, R, &oneAPF, &zeroAPF)) {
-                i->replaceAllUsesWith(changedVal);
+                replaceUsesAndDelete(i,changedVal);
                 modified = iModified = true;
               }
             }
@@ -262,7 +267,7 @@ namespace
             {
               ConstantInt * oneCI = ConstantInt::get(L->getContext(), oneAPI);
               if (Value * changedVal = selfInverse(L, R, oneCI)) {
-                i->replaceAllUsesWith(changedVal);
+                replaceUsesAndDelete(i,changedVal);
                 modified = iModified = true;
               }
               break;
@@ -288,7 +293,7 @@ namespace
         if (!iModified) {
           if (i->getNumOperands() == 2 && isa<Constant>(L) && isa<Constant>(R)) {
             Value * result = evalBinaryOp(op, L, R);
-            i->replaceAllUsesWith(result);
+            replaceUsesAndDelete(i,result);
             modified = iModified = true;
           }
         }
@@ -306,7 +311,8 @@ namespace
                     Instruction::Shl, 
                     R, ConstantInt::get(LC->getType(), lg, false));
                   i->getParent()->getInstList().insertAfter(i, newInst);
-                  i->replaceAllUsesWith(newInst);
+                  replaceUsesAndDelete(i,newInst);
+                  ++i; //skip over this newly created instruction
                   modified = iModified = true;
                 }
               } else if (ConstantInt* RC = dyn_cast<ConstantInt>(R)) {
@@ -317,14 +323,8 @@ namespace
                     Instruction::Shl,
                     L, ConstantInt::get(RC->getType(), lg, false));
                   i->getParent()->getInstList().insertAfter(i, newInst);
-                  i->replaceAllUsesWith(newInst);
-                  BasicBlock::iterator j = i;
-                  ++i;
-                  j->eraseFromParent();
-                  //i++;
-                  //i->getParent()->getInstList().remove(i);
-      //            i->replaceAllUsesWith(newInst);
-                  //ReplaceInstWithInst(i->getParent()->getInstList(), i, newInst);
+                  replaceUsesAndDelete(i,newInst);
+                  ++i; //skip over this newly created instruction
                   modified = iModified = true;
                   }
               }
