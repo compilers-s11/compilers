@@ -130,6 +130,7 @@ namespace
     }
 
     // For constant folding float operators. Simply perform the relevant operation on the operands.
+    // This will silently ignore errors like overflow/underflow
     ConstantFP* evalBinaryFloatOp(unsigned op, ConstantFP* left, ConstantFP* right) {
       APFloat lhs = left->getValueAPF();
       APFloat rhs = right->getValueAPF();

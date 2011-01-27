@@ -31,7 +31,9 @@ The number of instructions can be useful in estimating the amount of time it may
 We created a per-function pass (to facilitate constant propagation within the function) and iterated through each instruction, dispatching on its instruction type with a \texttt{switch} statement.
 \begin{enumerate}
 \item \textbf{Constant Propagation} When a constant was stored in a variable, we found places where it was being loaded into a register, and replaced all uses of the register with the constant by going through its use list. 
-\item \textbf{Algebraic Identities} (Salil)
+\item \textbf{Algebraic Identities} We check mainly for two types of algebraic identities: $a \oplus \text{identity} = a$ and $a \oplus \text{zero} = \text{zero}$, where \emph{identity} and \emph{zero} may differ for each operator $\oplus$ (and not all operators have both). Depending on the instructions opcode, we choose an identity element and/or a zero element, and check if the instruction is of the same form as the LHS of these two equations, and if so, we substitute the RHS. 
+
+Thus on the whole the logic is the same for all operators, although considerations such as commutativity do come into play. Furthermore, we also took into account some identities that are not of the forms given above (eg., for the remainder operators).
 \item \textbf{Constant Folding} When both operands of an arithmetic expression were constants, we replaced the instruction with a value resulting from computing the operation statically. We wrote  functions taking the operation and operands, one for integer operations and another for floating point operations, to produce this value and used a common function to insert this into the function.
 
 We note that floating point constant folding can produce exceptional conditions. We did not implement any mechanism for notifying the user of these conditions or aborting the constant folding operation in this condition.
@@ -39,6 +41,6 @@ We note that floating point constant folding can produce exceptional conditions.
 \end{enumerate}
 \section{Source Listing}
 \begin{verbatim}
-stuff
+asd
 \end{verbatim}
 \end{document}  
