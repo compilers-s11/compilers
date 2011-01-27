@@ -24,7 +24,7 @@ namespace
 
     bool constIdentities (unsigned opcode, Value *L, Value * R, uint64_t *identity, uint64_t *zero, Value * &retval) {
       if (ConstantInt *LC = dyn_cast<ConstantInt>(L)) {
-        if (LC->equalsInt(*identity)) {
+        if (identity && LC->equalsInt(*identity)) {
           retval = L;
           return true;
         } else if (zero && (LC->equalsInt(*zero))) {
@@ -36,7 +36,7 @@ namespace
           return true;
         }
       } else if (ConstantInt *RC = dyn_cast<ConstantInt>(R)) {
-        if (RC->equalsInt(*identity)) {
+        if (identity && RC->equalsInt(*identity)) {
           retval = L;
           return true;
         } else if (zero && (RC->equalsInt(*zero))) {
