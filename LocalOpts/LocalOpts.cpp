@@ -305,9 +305,9 @@ namespace
                   BinaryOperator* newInst = BinaryOperator::Create(
                     Instruction::Shl, 
                     R, ConstantInt::get(LC->getType(), lg, false));
-                  ReplaceInstWithInst(i->getParent()->getInstList(), i, newInst);
+                  i->getParent()->getInstList().insertAfter(i, newInst);
+                  i->replaceAllUsesWith(newInst);
                   modified = iModified = true;
-                  i = newInst;
                 }
               } else if (ConstantInt* RC = dyn_cast<ConstantInt>(R)) {
                 const APInt right = RC->getValue();
