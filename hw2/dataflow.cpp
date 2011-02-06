@@ -16,52 +16,70 @@ using namespace llvm;
 
 namespace
 {
-    template<bool forward=true>
-    struct Dataflow : public FunctionPass
+    template<bool forward>
+    struct Dataflow 
     {
-        static char ID;
-        Dataflow() : FunctionPass(ID), in(DomainMap()), out(DomainMap()) {
-		        
+        Dataflow() {
+          in = new DomainMap();
+          out = new DomainMap();
         }
      
         // transfer function
         // meet operator
         // initial 
      	typedef ValueMap<BasicBlock*, BitVector*> DomainMap;
-     	DomainMap in;
-     	DomainMap out;
-     	BitVector top;
+     	DomainMap *in;
+     	DomainMap *out;
+     	BitVector *top;
      	
         virtual bool runOnFunction(Function &f) {
             bool modified = false;
             
-            size_t numBlocks = f.size();
             BasicBlock & entry = f.getEntryBlock();
             
             for (Function::iterator bi = f.begin(), be = f.end(); bi != be; bi++) {
-            	in[&(*bi)] = new BitVector(top);
-            	out[&(*bi)] = new BitVector(top);
+                if (forward) {
+                  (*out)[&(*bi)] = initialInteriorPoint(*bi);
+                  (*in)[&(*bi)] = new BitVector(*top);
+                } else {
+                  (*in)[&(*bi)] = initialInteriorPoint(*bi);
+                  (*out)[&(*bi)] = new BitVector(*top);
+                }
             }
             
-            getBoundaryCondition(in[&entry]);
+            getBoundaryCondition((*in)[&entry]);
     	
     		bool changed = true;
-    		ValueMap<BasicBlock*, bool> visited = ValueMap<BasicBlock*, bool>();
+    		ValueMap<BasicBlock*, bool> *visited = new ValueMap<BasicBlock*, bool>();
     		while (changed) {
     			for (Function::iterator bb = f.begin(), be = f.end(); bb != be; bb++) {
-    				visited[&(*bb)] = false;
+    				(*visited)[&(*bb)] = false;
     			}
 
 		    	if (forward) {
-    				changed = reversePostOrder(f.getEntryBlock(), visited);
+    				changed = reversePostOrder(&f.getEntryBlock(), *visited);
     			} else {
-    				changed = postOrder(f.getEntryBlock(), visited);
+    				changed = postOrder(&f.getEntryBlock(), *visited);
     			}
     		}
 
-                // TODO: free memory. Not sure what hasto be freed anymore.
-		    
             return modified;
+        }
+
+        virtual void getAnalysisUsage(AnalysisUsage &AU) const
+        {
+          AU.setPreservesAll();
+        }
+              
+
+        ~Dataflow() {
+          for (DomainMap::iterator i = in->begin(), ie = in->end(); i != ie; i++) {
+            delete i->second;
+          }
+          for (DomainMap::iterator i = out->begin(), ie = out->end(); i != ie; i++) {
+            delete i->second;
+          }
+          delete top;
         }
         
         // curNode is a pointer now because otherwise you have to keep &ing it.. but visited is still a refernce... gaaah
@@ -73,25 +91,25 @@ namespace
         	pred_iterator PI = pred_begin(curNode), PE = pred_end(curNode);
         	if (PI != PE) {
         		// fold meet over out[ predecessors	]
-    			*in[curNode] = *out[*PI];
+    			*(*in)[curNode] = *(*out)[*PI];
         		for (PI++; PI != PE; PI++) {
-        			meet(in[curNode], out[*PI]);
+        			meet((*in)[curNode], (*out)[*PI]);
         		}
         	} // (otherwise entry)
         	
         	// apply transfer function
         	BitVector* newOut = transfer(*curNode);
-        	if (*newOut != *out[curNode]) {
+        	if (*newOut != *(*out)[curNode]) {
         		changed = true;
         		// copy new value
-        		*out[curNode] = *newOut;
+        		*(*out)[curNode] = *newOut;
         	}
     		delete newOut;
     		
     		// recurse on successors
     		for (succ_iterator SI = succ_begin(curNode), SE = succ_end(curNode); SI != SE; SI++) {
     			if (!visited[*SI])
-    				changed |= reversePostOrder(*SI);
+    				changed |= reversePostOrder(*SI, visited);
     		}
         	
         	return changed;
@@ -104,27 +122,27 @@ namespace
     		// recurse on successors
     		for (succ_iterator SI = succ_begin(curNode), SE = succ_end(curNode); SI != SE; SI++) {
     			if (!visited[*SI])
-    				changed |= reversePostOrder(*SI);
+    				changed |= postOrder(*SI, visited);
     		}
         	
         	// apply meet operator over predecessors
         	succ_iterator SI = succ_begin(curNode), SE = succ_end(curNode);
         	if (SI != SE) {
         		// fold meet over in[ successors ]
-    			*out[curNode] = *in[*SI];
+    			*(*out)[curNode] = *(*in)[*SI];
         		for (SI++; SI != SE; SI++) {
-        			meet(out[curNode], in[*SI]);
+        			meet((*out)[curNode], (*in)[*SI]);
         		}
         	} else {
-        		getBoundaryCondition(out[curNode]);
+        		getBoundaryCondition((*out)[curNode]);
         	}
         	
         	// apply transfer function
         	BitVector* newIn = transfer(*curNode);
-        	if (*newIn != *in[curNode]) {
+        	if (*newIn != *(*in)[curNode]) {
         		changed = true;
         		// copy new value
-        		*in[curNode] = *newIn;
+        		*(*in)[curNode] = *newIn;
         	}
     		delete newIn;
 
@@ -132,8 +150,9 @@ namespace
         }
         
         virtual void getBoundaryCondition(BitVector*) = 0;
-        virtual void meet(BitVector*, BitVector*) = 0;
-        virtual BitVector* transfer(const BasicBlock &) = 0;
+        virtual void meet(BitVector*, const BitVector*) = 0;
+        virtual BitVector * initialInteriorPoint(BasicBlock&) = 0;
+        virtual BitVector* transfer(BasicBlock &) = 0;
     };
 
 //    char Dataflow::ID = 0;
