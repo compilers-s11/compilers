@@ -6,8 +6,8 @@
 #include "llvm/Constants.h"
 #include "llvm/ADT/APFloat.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
-#include "llvm/BitVector.h"
-#include "llvm/ValueMap.h"
+#include "llvm/ADT/BitVector.h"
+#include "llvm/ADT/ValueMap.h"
 #include "llvm/Support/CFG.h"
 
 #include <ostream>
@@ -16,12 +16,11 @@ using namespace llvm;
 
 namespace
 {
-	template<bool forward=true>
+    template<bool forward=true>
     struct Dataflow : public FunctionPass
     {
         static char ID;
-        Dataflow() : FunctionPass(ID) {
-	        
+        Dataflow() : FunctionPass(ID), in(DomainMap()), out(DomainMap()) {
 		        
         }
      
@@ -37,38 +36,36 @@ namespace
             bool modified = false;
             
             size_t numBlocks = f.size();
-            const BasicBlock & entry = f.getEntryBlock();
+            BasicBlock & entry = f.getEntryBlock();
             
-            in = new DomainMap();
-            out = new DomainMap();
-            for (int i=0; i < numBlocks; ++i) {
-            	in[i] = new BitVector(top);
-            	out[i] = new BitVector(top);
+            for (Function::iterator bi = f.begin(), be = f.end(); bi != be; bi++) {
+            	in[&(*bi)] = new BitVector(top);
+            	out[&(*bi)] = new BitVector(top);
             }
             
-            getBoundaryCondition(in[entry]);
+            getBoundaryCondition(in[&entry]);
     	
     		bool changed = true;
-    		ValueMap<BasicBlock*, bool>* visited = new ValueMap<BasicBlock*, bool>();
+    		ValueMap<BasicBlock*, bool> visited = ValueMap<BasicBlock*, bool>();
     		while (changed) {
-    			for (iterator bb = f.begin(), be = f.end(); bb != be; bb++) {
-    				visited[&*bb] = false;
+    			for (Function::iterator bb = f.begin(), be = f.end(); bb != be; bb++) {
+    				visited[&(*bb)] = false;
     			}
 
 		    	if (forward) {
-    				changed = reversePostOrder(f.getEntryBlock(), *visited);
+    				changed = reversePostOrder(f.getEntryBlock(), visited);
     			} else {
-    				changed = postOrder(f.getEntryBlock(), *visited);
+    				changed = postOrder(f.getEntryBlock(), visited);
     			}
     		}
-    	    	
-	    
-		    // TODO: free memory
+
+                // TODO: free memory. Not sure what hasto be freed anymore.
 		    
             return modified;
         }
         
-        virtual bool reversePostOrder(const BasicBlock & curNode, ValueMap<BasicBlock*, bool>& visited) {
+        // curNode is a pointer now because otherwise you have to keep &ing it.. but visited is still a refernce... gaaah
+        virtual bool reversePostOrder(BasicBlock* curNode, ValueMap<BasicBlock*, bool>& visited) {
         	visited[curNode] = true;
         	bool changed = false;
 
@@ -83,7 +80,7 @@ namespace
         	} // (otherwise entry)
         	
         	// apply transfer function
-        	BitVector* newOut = transfer(curNode);
+        	BitVector* newOut = transfer(*curNode);
         	if (*newOut != *out[curNode]) {
         		changed = true;
         		// copy new value
@@ -100,7 +97,7 @@ namespace
         	return changed;
         }
         
-        virtual bool reversePostOrder(const BasicBlock & curNode, ValueMap<BasicBlock*, bool>& visited) {
+        virtual bool postOrder(BasicBlock* curNode, ValueMap<BasicBlock*, bool>& visited) {
         	visited[curNode] = true;
         	bool changed = false;
 
@@ -116,14 +113,14 @@ namespace
         		// fold meet over in[ successors ]
     			*out[curNode] = *in[*SI];
         		for (SI++; SI != SE; SI++) {
-        			meet(out[curNode], in[*PI]);
+        			meet(out[curNode], in[*SI]);
         		}
         	} else {
         		getBoundaryCondition(out[curNode]);
         	}
         	
         	// apply transfer function
-        	BitVector* newIn = transfer(curNode);
+        	BitVector* newIn = transfer(*curNode);
         	if (*newIn != *in[curNode]) {
         		changed = true;
         		// copy new value
@@ -134,12 +131,12 @@ namespace
         	return changed;
         }
         
-        virtual getBoundaryCondition(BitVector*) = 0;
+        virtual void getBoundaryCondition(BitVector*) = 0;
         virtual void meet(BitVector*, BitVector*) = 0;
         virtual BitVector* transfer(const BasicBlock &) = 0;
     };
 
-    char LocalOpts::ID = 0;
-    static RegisterPass<LocalOpts> x("Dataflow", "Dataflow", false, false);
+//    char Dataflow::ID = 0;
+//    static RegisterPass<Dataflow> x("Dataflow", "Dataflow", false, false);
 }
 
