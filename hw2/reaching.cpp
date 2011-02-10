@@ -86,7 +86,7 @@ namespace
         // Display the bytecode annotated with the reaching definitions at each point
         virtual void displayResults(Function &F) {
           for (Function::iterator bi = F.begin(), be = F.end(); bi != be; bi++) {
-            errs() << bi->getName() << "\n"; << "\n"; //Display labels for basic blocks
+            errs() << bi->getName() << "\n"; //Display labels for basic blocks
             for (BasicBlock::iterator ii = bi->begin(), ie = bi->end(); ii != ie; ii++) {
               printBV((*printMap)[&*ii]);
               errs() << "\t"<< *ii << "\n";
