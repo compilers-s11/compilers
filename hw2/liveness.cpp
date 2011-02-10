@@ -1,3 +1,7 @@
+/** CMU 15-745: Optimizing Compilers
+    Spring 2011
+    Salil Joshi and Cyrus Omar
+ **/
 #include "llvm/Pass.h"
 #include "llvm/BasicBlock.h"
 #include "llvm/Support/raw_ostream.h"
@@ -66,7 +70,6 @@ namespace
           numTotal = 0;
           numArgs = 0;
           
-          errs() << "A\n";
           // add function arguments to maps
           for (Function::arg_iterator ai = F.arg_begin(), ae = F.arg_end(); ai != ae; ai++) {
             (*index)[&*ai] = numArgs;
@@ -75,7 +78,6 @@ namespace
           }
           numTotal = numArgs; 
           
-          errs() << "B\n";
           // add definitions to maps
           for (inst_iterator ii = inst_begin(&F), ie = inst_end(&F); ii != ie; ii++) {
             if (isDefinition(&*ii)) {
@@ -85,18 +87,15 @@ namespace
             }
           }
           
-          errs() << "C\n";
           // initialize instIn
           for (inst_iterator ii = inst_begin(&F), ie = inst_end(&F); ii != ie; ii++) {
             (*instIn)[&*ii] = new BitVector(numTotal, false);
           }
           top = new BitVector(numTotal, false);
           
-          errs() << "D\n";
           // run data flow 
           Dataflow<false>::runOnFunction(F);
          
-          errs() << "E\n";
           // print out instructions with reaching variables between each instruction 
           displayResults(F);
           
@@ -106,15 +105,32 @@ namespace
         
         virtual BitVector* transfer(BasicBlock& bb) {
           // we iterate over instructions in reverse beginning with out[bb]
-          BitVector* next = (*out)[&bb];
+          BitVector* next = new BitVector(*((*out)[&bb]));
+          
           // temporary variables for convenience
           BitVector* instVec = next; // for empty blocks
           Instruction* inst;
 
+          // add local phi-captured nodes to out          
+          for (BasicBlock::iterator ii = bb.begin(), ib = bb.end(); ii != ib; ++ii) {
+            if (isa<PHINode>(*ii)) {
+              PHINode* phiInst = cast<PHINode>(&*ii);
+              unsigned idx = phiInst->  getBasicBlockIndex (&bb);
+              if (idx < phiInst->getNumIncomingValues()){
+                Value* v = phiInst -> getIncomingValue(idx);
+                if (isa<Instruction>(v) || isa<Argument>(v))
+                {
+                  (*next)[(*index)[v]] = true;
+                }
+              }
+            }
+          }
+
+          // go through instructions in reverse
           BasicBlock::iterator ii = --(bb.end()), ib = bb.begin();
           while (true) {
             
-            // begin with liveness below
+            // inherit data from next instruction
             inst = &*ii;
             instVec = (*instIn)[inst];            
             *instVec = *next;
@@ -123,66 +139,65 @@ namespace
             if (isDefinition(inst))
               (*instVec)[(*index)[inst]] = false;
                             
-            // add the arguments
+            // add the arguments, unless it is a phi node
+            if (!isa<PHINode>(*ii)) {
             User::op_iterator OI, OE;
             for (OI = inst->op_begin(), OE=inst->op_end(); OI != OE; ++OI) {
               if (isa<Instruction>(*OI) || isa<Argument>(*OI)) {
                 (*instVec)[(*index)[*OI]] = true;
               }
             }
-            
+            }
             next = instVec;
 
             if (ii == ib) break;
             --ii;
           }
           
+          // remove the phi nodes from in 
           instVec = new BitVector(*instVec);
-          for (ii = bb.begin(), ib = bb.end(); ii != ib; ++ii) {
-            // if it is a phi node remove the incoming value too
-            if (isa<PHINode>(inst)) {
-              PHINode* phiInst = cast<PHINode>(inst);
-              unsigned numIncomingValues = phiInst->getNumIncomingValues();
-              errs() << "PHI" << numIncomingValues << "\n";
-              for (unsigned i=0; i < numIncomingValues; ++i) {
-                Value* v = phiInst->getIncomingValue(i);
+          for (BasicBlock::iterator ii = bb.begin(), ib = bb.end(); ii != ib; ++ii) {
+            if (isa<PHINode>(*ii)) {
+              PHINode* phiInst = cast<PHINode>(&*ii);
+              unsigned idx = phiInst->  getBasicBlockIndex (&bb);
+              if (idx < phiInst->getNumIncomingValues()){
+                Value* v = phiInst -> getIncomingValue(idx);
                 if (isa<Instruction>(v) || isa<Argument>(v))
                 {
-                  WriteAsOperand(errs(), v, false);
-                  errs() << (*instVec)[(*index)[v]];
-                  (*instVec)[(*index)[v]] = false;
+                  (*next)[(*index)[v]] = false;
                 }
               }
             }
           }
           return instVec;
-          // return a copy of the first instruction's pre-condition to fold into in[bb]
         }
         
         virtual void displayResults(Function &F) {
           // iterate over basic blocks
           Function::iterator bi = F.begin(), be = (F.end());
-          for (; bi != be; bi++) {            
+          printBV( (*out)[&*bi] ); // entry node
+          for (; bi != be; ) {            
+            errs() << bi->getName() << ":\n"; //Display labels for basic blocks
           
             // iterate over remaining instructions except very first one
             BasicBlock::iterator ii = bi->begin(), ie = (bi->end());
             errs() << "\t" << *ii << "\n";
             for (ii++; ii != ie; ii++) {
-              if (!isa<PHINode>(*(++ii))) {
-                --ii;
+              if (!isa<PHINode>(*(ii))) {
                 printBV( (*instIn)[&*ii] );
-              } else --ii;
+              }
               errs() << "\t" << *ii << "\n";
             }
             
             // display in[bb]
-            //if (!isa<PHINode>(*(bi->begin())))
+            ++bi;
+            
+            if (bi != be && !isa<PHINode>(*((bi)->begin())))
               printBV( (*out)[&*bi] );
 
-            errs() << "\n\n\n";
+            errs() << "\n";
           }
-          // ...unless there are no more blocks
-          printBV( (*out)[&*(--be)] );
+          printBV( (*out)[&*(--bi)] );
         }
         
         virtual void printBV(BitVector *bv) {

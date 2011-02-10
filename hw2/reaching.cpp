@@ -1,3 +1,8 @@
+/** CMU 15-745: Optimizing Compilers
+    Spring 2011
+    Salil Joshi and Cyrus Omar
+ **/
+
 #include "llvm/Pass.h"
 #include "llvm/BasicBlock.h"
 #include "llvm/Support/raw_ostream.h"
@@ -43,6 +48,7 @@ namespace
 		    // map from instructions to bitvector corresponding to program point AFTER that instruction
         ValueMap<Instruction*, BitVector*> *instOut;
 
+        
         virtual void meet(BitVector *op1, const BitVector *op2) {
         	// union
           *op1 |= *op2;
@@ -57,6 +63,7 @@ namespace
         }
         
         bool isDefinition(Instruction *ii) {
+          // All other types of instructions are definitions
           return (!(isa<TerminatorInst>(ii) || isa<StoreInst>(ii) || (isa<CallInst>(ii) && cast<CallInst>(ii)->getCalledFunction()->getReturnType()->isVoidTy())));
         }
 
@@ -120,6 +127,18 @@ namespace
             if (isDefinition(inst))
               (*instVec)[(*index)[inst]] = true;
             
+            // if it is a phi node, kill the stuff
+            if (isa<PHINode>(inst)) {
+              PHINode* p = cast<PHINode>(inst);
+              unsigned num = p->getNumIncomingValues();
+              for (int i=0; i < num; ++i) {
+                Value* v = p->getIncomingValue(i);
+                if (isa<Instruction>(v) || isa<Argument>(v)) {
+                  (*instVec)[(*index)[v]] = false;
+                }
+              }
+            }
+            
             prev = instVec;
           }
           
@@ -131,6 +150,7 @@ namespace
           // iterate over basic blocks
           Function::iterator bi = F.begin(), be = (F.end());
           for (; bi != be; bi++) {
+            errs() << bi->getName() << ":\n"; //Display labels for basic blocks
             // display in[bb]
             if (!isa<PHINode>(*(bi->begin())))
               printBV( (*in)[&*bi] );
@@ -148,7 +168,7 @@ namespace
               
             }
             errs() << "\t" << *(ii) << "\n";
-            errs() << "\n\n\n";
+            errs() << "\n";
           }
           // ...unless there are no more blocks
           printBV( (*out)[&*(--be)] );

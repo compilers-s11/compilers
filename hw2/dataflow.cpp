@@ -1,3 +1,8 @@
+/** CMU 15-745: Optimizing Compilers
+    Spring 2011
+    Salil Joshi and Cyrus Omar
+ **/
+
 #include "llvm/Pass.h"
 #include "llvm/BasicBlock.h"
 #include "llvm/Support/raw_ostream.h"
@@ -11,6 +16,7 @@
 #include "llvm/Support/CFG.h"
 
 #include <ostream>
+#include <list>
 
 using namespace llvm;
 
@@ -72,109 +78,119 @@ namespace
                 	// when we reach a node with no successors in the loop below...
                 }
             }
-            
-            // boundary conditions for entry node
-            if (forward)
-              getBoundaryCondition((*in)[&entry]);
-            
-            // iteration-level change detection
-        		bool changed = true;
-        		
-        		// need a map to track whether a block has already been visited in an iteration
-        		ValueMap<BasicBlock*, bool> *visited = new ValueMap<BasicBlock*, bool>();
-        		
-        		while (changed) {
-              errs() << "LOOP\n";  
-        			// initialize visited to false
-        			for (Function::iterator bb = f.begin(), be = f.end(); bb != be; bb++) {
-        				(*visited)[&(*bb)] = false;
-        			}
-    			
-    		    	if (forward) {
-        				changed = reversePostOrder(&entry, *visited);
-        			} else {  
-        				changed = postOrder(&entry, *visited);
-        			}
-        		}
 
+           if (forward)            
+              // boundary conditions for entry node
+              getBoundaryCondition((*in)[&entry]);         
+
+            
+            /* worklist maintains a list of all basic blocks on whom the transfer 
+             * function needs to be applied.*/
+            std::list<BasicBlock*> *worklist = new std::list<BasicBlock*>();
+
+            //Initially, every node is in the worklist
+            bfs(f,*worklist); 
+
+            if (!forward)
+              //for backward passes, start at exit nodes and work backwards
+              worklist->reverse(); 
+
+            while (!worklist->empty()) {
+              if (forward) {
+                reversePostOrder(*worklist);
+              } else {
+                postOrder(*worklist);
+              }
+            }
+
+            delete worklist;
             return false;
         }
 
-        virtual void getAnalysisUsage(AnalysisUsage &AU) const
-        {
-        	AU.setPreservesAll();
+        virtual void bfs(Function &f, std::list<BasicBlock*> &worklist) {
+          BasicBlock * curNode;
+          ValueMap<BasicBlock*, bool> *visited = new ValueMap<BasicBlock*,bool>();
+
+          for (Function::iterator bb = f.begin(), be = f.end(); bb != be; bb++) {
+            (*visited)[&*bb] = false;
+          }
+
+          std::list<BasicBlock*> *l = new std::list<BasicBlock*>();
+
+          l->push_back(&f.getEntryBlock());
+          while (!l->empty()) {
+            curNode = *(l->begin());
+            l->pop_front();
+            worklist.push_back(curNode);
+
+            (*visited)[curNode] = true;
+            for (succ_iterator SI = succ_begin(curNode), SE = succ_end(curNode); SI != SE; SI++) {
+              if (!(*visited)[*SI]) {
+                l->push_back(*SI);
+              }
+            }
+          }
+
+          delete visited;
+          delete l;
+        }
+
+        virtual void reversePostOrder(std::list<BasicBlock*> &q) {
+          BasicBlock * curNode = *q.begin();
+          q.pop_front();
+
+          pred_iterator PI = pred_begin(curNode), 
+                        PE = pred_end(curNode);
+          if (PI != PE) {
+            // begin with a copy of out[first predecessor]
+            *(*in)[curNode] = *(*out)[*PI];  
+
+            // fold meet over predecessors
+            for (PI++; PI != PE; PI++) {
+              meet((*in)[curNode], (*out)[*PI]);
+            }
+          } // (otherwise entry node, in[entry] already set above)
+
+          // apply transfer function
+          BitVector* newOut = transfer(*curNode);
+          if (*newOut != *(*out)[curNode]) {
+            // copy new value
+            *(*out)[curNode] = *newOut;
+            for (succ_iterator SI = succ_begin(curNode), SE = succ_end(curNode); SI != SE; SI++) {
+              q.push_back(*SI);
+            }
+          }
+          delete newOut;
         }
         
-        // curNode is a pointer now because otherwise you have to keep &ing it.. but visited is still a refernce... gaaah
-        virtual bool reversePostOrder(BasicBlock* curNode, ValueMap<BasicBlock*, bool>& visited) {
-        	visited[curNode] = true;
-        	bool changed = false;
-
-        	pred_iterator PI = pred_begin(curNode), 
-        	              PE = pred_end(curNode);
-        	if (PI != PE) {
-        		// begin with a copy of out[first predecessor]
-    			  *(*in)[curNode] = *(*out)[*PI];  
-        		
-        		// fold meet over predecessors
-        		for (PI++; PI != PE; PI++) {
-        			meet((*in)[curNode], (*out)[*PI]);
-        		}
-        	} // (otherwise entry node with no backarrows, in[entry] already set above)
+        virtual void postOrder(std::list<BasicBlock*> &q) {
+          BasicBlock *curNode = *q.begin();
+          q.pop_front();
         	
-        	// apply transfer function
-        	BitVector* newOut = transfer(*curNode);
-        	if (*newOut != *(*out)[curNode]) {
-        		changed = true;
-        		// copy new value
-        		*(*out)[curNode] = *newOut;
-        	}
-    		  delete newOut;
-    		
-      		// recurse on successors
-      		for (succ_iterator SI = succ_begin(curNode), SE = succ_end(curNode); SI != SE; SI++) {
-      			if (!visited[*SI])
-      				changed |= reversePostOrder(*SI, visited);
-      		}
-        	
-        	return changed;
-        }
-        
-        virtual bool postOrder(BasicBlock* curNode, ValueMap<BasicBlock*, bool>& visited) {
-        	visited[curNode] = true;
-        	bool changed = false;
+          succ_iterator SI = succ_begin(curNode), SE = succ_end(curNode);
+          if (SI != SE) {
+            // begin with a copy of in[first successor]
+            *(*out)[curNode] = *(*in)[*SI];
 
-    		  // recurse on successors
-    		  for (succ_iterator SI = succ_begin(curNode), SE = succ_end(curNode); SI != SE; SI++) {
-    			  if (!visited[*SI])
-    				  changed |= postOrder(*SI, visited);
-    		  }
-          
-        	succ_iterator SI = succ_begin(curNode), SE = succ_end(curNode);
- 
-        	if (SI != SE) {
-        		// begin with a copy of in[first successor]
-    			  *(*out)[curNode] = *(*in)[*SI];
-    			
-	        	// fold meet operator over successors
-        		for (SI++; SI != SE; SI++) {
-        			meet((*out)[curNode], (*in)[*SI]);
-        		}
-        	} else {
-        		// boundary condition when it is an exit block
-        		getBoundaryCondition((*out)[curNode]);
-        	}
-        	
-        	// apply transfer function
-        	BitVector* newIn = transfer(*curNode);
-        	if (*newIn != *(*in)[curNode]) {
-        		changed = true;
-        		// copy new value
-        		*(*in)[curNode] = *newIn;
-        	}
-    		  delete newIn;
+            // fold meet operator over successors
+            for (SI++; SI != SE; SI++) {
+              meet((*out)[curNode], (*in)[*SI]);
+            }
+          } else {
+            // boundary condition when it is an exit block
+            getBoundaryCondition((*out)[curNode]);
+          }
 
-        	return changed;
+          // apply transfer function
+          BitVector* newIn = transfer(*curNode);
+          if (*newIn != *(*in)[curNode]) {
+            // copy new value
+            *(*in)[curNode] = *newIn;
+            for (pred_iterator PI = pred_begin(curNode), PE = pred_end(curNode); PI != PE; PI++) {
+              q.push_back(*PI);
+            }
+          }
+          delete newIn;
         }
         
         virtual void getBoundaryCondition(BitVector*) = 0;
