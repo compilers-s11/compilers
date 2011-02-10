@@ -71,9 +71,10 @@ namespace
                 	// when we reach a node with no successors in the loop below...
                 }
             }
-            
-            // boundary conditions for entry node
-            getBoundaryCondition((*in)[&entry]);         
+
+            if (forward)            
+              // boundary conditions for entry node
+              getBoundaryCondition((*in)[&entry]);         
 
             
             // iteration-level change detection

@@ -1,0 +1,61 @@
+\documentclass[12pt]{article}
+\usepackage{geometry}                % See geometry.pdf to learn the layout options. There are lots.
+\geometry{letterpaper}                   % ... or a4paper or a5paper or ... 
+%\geometry{landscape}                % Activate for for rotated page geometry
+%\usepackage[parfill]{parskip}    % Activate to begin paragraphs with an empty line rather than an indent
+\usepackage{graphicx}
+\usepackage{amssymb}
+\usepackage{amsmath}
+
+\title{{\small 15-745: Spring 2011}\\Homework 2}
+\author{Salil Joshi\\
+salilj@andrew.cmu.edu
+\and
+Cyrus Omar\\
+cyrus@cmu.edu
+}
+\date{}                                           % Activate to display a given date or no date
+
+\begin{document}
+\maketitle
+\section{The Dataflow framework}
+We developed a general dataflow framework that can be used to implement specific dataflow analyses like Reaching Definition of Liveness analysis. This framework is implemented as a class \verb|Dataflow|. This class implements both the forward and backward analysis algorithms in a generalized form.
+
+The user of this framework must define a class that inherits from both \verb|Dataflow| and \verb|FunctionPass| (and must register his pass with LLVM as usual). The \verb|Dataflow| class takes a boolean template argument \verb|forward|. If this is true, then dataflow is run in the forward direction, otherwise backward. The class also has as fields the maps \verb|in| and \verb|out| from \verb|BasicBlock*| to \verb|BitVector*| which represent the in and out sets for each block. These may be used by any subclass.
+
+The following functions and data members must be implemented by any subclass of Dataflow:
+\begin{itemize}
+\item \verb|BitVector * top|; This is a \verb|BitVector| that must be initialized by the subclass before the \verb|runOnFunction| method of the parent \verb|Dataflow| class is called. It represnts the \textbf{top} element of the underlying sub-lattice.
+\item \verb|void getBoundaryCondition(BitVector*)|. This takes a pointer to a \verb|BitVector|, and modifies this \verb|BitVector| appropriately. For a forward pass, this is the \verb|out[b]| of the Entry node, and for a backward pass it is the \verb|in[b]| of the Exit node.
+\item \verb|BitVector * initialInteriorPoint(BasicBlock&)|; For a forward pass, this function should return the initial \verb|out[b]| for any block \verb|b|. For a backward pass it should return the initial \verb|in[b]| for any block \verb|b|. Returning a copy of \verb|top| is always correct, but not always the most efficient solution.
+
+\item \verb|void meet(BitVector*, const BitVector*)|; This function takes the \textbf{meet} of the two \verb|BitVector|s passed in as arguments, and sets the first argument to the result.
+
+\item \verb|BitVector* transfer(BasicBlock&)|; This is the transfer function for the specific analysis to be run.
+\end{itemize}
+Note that in the above the \verb|BitVector|s for top, the boundary conditions and initial interior points must all be distinct (i.e.\ must not point to the same object).
+
+When the subclass wishes to run the dataflow pass, it must call the \verb|runOnFunction| method of its parent \verb|Dataflow| class, passing in a reference to the \verb|Function| on which the pass is to be run.
+
+\section{Reaching Definitions}
+We made use of the dataflow framework described above to implement Reaching Defintion analysis. This is a forward function pass, so the class \verb|Reaching| is a subclass of \verb|FunctionPass| and of \verb|Dataflow<true>|.
+
+Since the \verb|in| and \verb|out| sets are maintained as \verb|BitVector|s, we maintain a bidirectional map from definitions to their index in the \verb|BitVector|. This map is implemented by the two fields \verb|index| and \verb|r_index|. The maximum index is stored in \verb|maxIndex|. In order to initialize these three fields corectly, we go through all instructions once before running the actual dataflow algorithm, in order to give each definition an index.
+
+We also store a mapping (called \verb|printMap|) from each instruction to the set of reaching definitions for the program point just before the instruction. This is not needed for the analysis itself, but it is needed to display the output, since we wish to display the reaching definitions are every program point. \verb|in| and \verb|out| are not sufficient for this purpose.
+
+This pass then calls \verb|runOnFunction| on its parent \verb|Dataflow|, and then prints the results.
+
+The functions and fields required by the dataflow framework are initialized as follows:
+\begin{itemize}
+\item \verb|top|: This is a \verb|BitVector| of size \verb|maxIndex+1|, with all bits set to \verb|false|. It represents the empty set.
+\item \verb|getBoundaryCondition|: This is the same as \verb|top|
+\item \verb|initialInteriorPoint|: This is also the same as \verb|top| for every block
+\item \verb|meet|: Since the meet in the underlying sub-lattice is union, this function simply takes the bitwise OR of the two \verb|BitVector|s passed in.
+\item \verb|transfer|: This function iterates through the instructions in the block, and does the following:
+\begin{itemize}
+  \item For each instruction, it stores the in set for this instruction in \verb|printMap|
+  \item If this instruction is a definition, it sets the corresponding bit in the result \verb|BitVector|. The \verb|index| map is used to find the index corresponding to this definition in the \verb|BitVector|
+\end{itemize}
+\end{itemize}
+\end{document}
