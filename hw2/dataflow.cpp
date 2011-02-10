@@ -47,6 +47,7 @@ namespace
         }
      	
         virtual bool runOnFunction(Function &f) {
+        
             BasicBlock& entry = f.getEntryBlock();
             
             // initialize in and out
@@ -73,8 +74,8 @@ namespace
             }
             
             // boundary conditions for entry node
-            getBoundaryCondition((*in)[&entry]);         
-
+            if (forward)
+              getBoundaryCondition((*in)[&entry]);
             
             // iteration-level change detection
         		bool changed = true;
@@ -83,6 +84,7 @@ namespace
         		ValueMap<BasicBlock*, bool> *visited = new ValueMap<BasicBlock*, bool>();
         		
         		while (changed) {
+              errs() << "LOOP\n";  
         			// initialize visited to false
         			for (Function::iterator bb = f.begin(), be = f.end(); bb != be; bb++) {
         				(*visited)[&(*bb)] = false;
@@ -90,7 +92,7 @@ namespace
     			
     		    	if (forward) {
         				changed = reversePostOrder(&entry, *visited);
-        			} else {
+        			} else {  
         				changed = postOrder(&entry, *visited);
         			}
         		}
@@ -112,13 +114,13 @@ namespace
         	              PE = pred_end(curNode);
         	if (PI != PE) {
         		// begin with a copy of out[first predecessor]
-    			*(*in)[curNode] = *(*out)[*PI];  
+    			  *(*in)[curNode] = *(*out)[*PI];  
         		
         		// fold meet over predecessors
         		for (PI++; PI != PE; PI++) {
         			meet((*in)[curNode], (*out)[*PI]);
         		}
-        	} // (otherwise entry node, in[entry] already set above)
+        	} // (otherwise entry node with no backarrows, in[entry] already set above)
         	
         	// apply transfer function
         	BitVector* newOut = transfer(*curNode);
@@ -127,13 +129,13 @@ namespace
         		// copy new value
         		*(*out)[curNode] = *newOut;
         	}
-    		delete newOut;
+    		  delete newOut;
     		
-    		// recurse on successors
-    		for (succ_iterator SI = succ_begin(curNode), SE = succ_end(curNode); SI != SE; SI++) {
-    			if (!visited[*SI])
-    				changed |= reversePostOrder(*SI, visited);
-    		}
+      		// recurse on successors
+      		for (succ_iterator SI = succ_begin(curNode), SE = succ_end(curNode); SI != SE; SI++) {
+      			if (!visited[*SI])
+      				changed |= reversePostOrder(*SI, visited);
+      		}
         	
         	return changed;
         }
@@ -142,16 +144,17 @@ namespace
         	visited[curNode] = true;
         	bool changed = false;
 
-    		// recurse on successors
-    		for (succ_iterator SI = succ_begin(curNode), SE = succ_end(curNode); SI != SE; SI++) {
-    			if (!visited[*SI])
-    				changed |= postOrder(*SI, visited);
-    		}
-        	
+    		  // recurse on successors
+    		  for (succ_iterator SI = succ_begin(curNode), SE = succ_end(curNode); SI != SE; SI++) {
+    			  if (!visited[*SI])
+    				  changed |= postOrder(*SI, visited);
+    		  }
+          
         	succ_iterator SI = succ_begin(curNode), SE = succ_end(curNode);
+ 
         	if (SI != SE) {
         		// begin with a copy of in[first successor]
-    			*(*out)[curNode] = *(*in)[*SI];
+    			  *(*out)[curNode] = *(*in)[*SI];
     			
 	        	// fold meet operator over successors
         		for (SI++; SI != SE; SI++) {
@@ -169,7 +172,7 @@ namespace
         		// copy new value
         		*(*in)[curNode] = *newIn;
         	}
-    		delete newIn;
+    		  delete newIn;
 
         	return changed;
         }

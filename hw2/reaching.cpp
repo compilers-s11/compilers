@@ -25,92 +25,146 @@ namespace
         static char ID;
 
         ReachingDefinitions() : Dataflow<true>(), FunctionPass(ID) {
-          index = new ValueMap<Instruction*, int>();
-          r_index = new std::vector<Instruction*>();
-          printMap = new ValueMap<Instruction*, BitVector*>();
+          index = new ValueMap<Value*, int>();
+          r_index = new std::vector<Value*>();
+          instOut = new ValueMap<Instruction*, BitVector*>();
         }
 
-        ValueMap<Instruction*, int> *index;
-        std::vector<Instruction*> *r_index;
-        int maxIndex;
+        // map from instructions/argument to their index in the bitvector
+        ValueMap<Value*, int> *index;
+        
+        // map from index in bitvector back to instruction/argument
+        std::vector<Value*> *r_index;
+        
+        // convenience
+        int numTotal;
+        int numArgs;
 
-        ValueMap<Instruction*, BitVector*> *printMap;
-
+		    // map from instructions to bitvector corresponding to program point AFTER that instruction
+        ValueMap<Instruction*, BitVector*> *instOut;
 
         virtual void meet(BitVector *op1, const BitVector *op2) {
+        	// union
           *op1 |= *op2;
         }
 
         virtual void getBoundaryCondition(BitVector *entry) {
-          entry = new BitVector(maxIndex,0);
+        	// in[b] = just the arguments if no predecessors / entry node
+          *entry = BitVector(numTotal, false);
+         	for (int i=0; i < numArgs; ++i) {
+         		(*entry)[i] = true;
+         	} 	
         }
-
+        
         bool isDefinition(Instruction *ii) {
           return (!(isa<TerminatorInst>(ii) || isa<StoreInst>(ii) || (isa<CallInst>(ii) && cast<CallInst>(ii)->getCalledFunction()->getReturnType()->isVoidTy())));
         }
 
         BitVector* initialInteriorPoint(BasicBlock& bb) {
-          return new BitVector(maxIndex+1,false);
+        	// out[b] = empty set initially
+          return new BitVector(numTotal, false);
         }
 
         virtual bool runOnFunction(Function &F) {
-          maxIndex = 0;
-
-          //TODO Add space for arguments and global variabes
+        	numTotal = 0;
+        	numArgs = 0;
+        	
+        	// add function arguments to maps
+        	for (Function::arg_iterator ai = F.arg_begin(), ae = F.arg_end(); ai != ae; ai++) {
+        		(*index)[&*ai] = numArgs;
+        		r_index->push_back(&*ai);
+        		numArgs++;
+        	}
+          numTotal = numArgs; 
+        	
+        	// add definitions to maps
+        	for (inst_iterator ii = inst_begin(&F), ie = inst_end(&F); ii != ie; ii++) {
+        		if (isDefinition(&*ii)) {
+        			(*index)[&*ii] = numTotal;
+        			r_index->push_back(&*ii);
+        			numTotal++;
+        		}
+        	}
+         
+          // initialize instOut
           for (inst_iterator ii = inst_begin(&F), ie = inst_end(&F); ii != ie; ii++) {
-            if (isDefinition(&*ii)) {
-              (*index)[&*ii] = maxIndex;
-              r_index->push_back(&*ii);
-              maxIndex++;
-            }
-            (*printMap)[&*ii] = new BitVector();
+            (*instOut)[&*ii] = new BitVector(numTotal, false);
           }
-          maxIndex--;
-
-          top = new BitVector(maxIndex+1, false);
-          Dataflow<true>::runOnFunction(F);
-
-          displayResults(F);
-
-          return false;
+        	top = new BitVector(numTotal, false);
+        	
+          // run data flow 
+        	Dataflow<true>::runOnFunction(F);
+         
+          // print out instructions with reaching variables between each instruction 
+        	displayResults(F);
+        	
+          // didn't modify nothing 
+        	return false;
         }
+        
+        virtual BitVector* transfer(BasicBlock& bb) {
+          // we iterate over instructions beginning with in[bb]
+          BitVector* prev = (*in)[&bb];
+          
+          // temporary variables for convenience
+          BitVector* instVec = prev; // for empty blocks
+          Instruction* inst;
 
+          for (BasicBlock::iterator ii = bb.begin(), ie = bb.end(); ii != ie; ii++) {
+            // begin with previous reaching definitions
+            inst = &*ii;
+            instVec = (*instOut)[inst];            
+            *instVec = *prev;
+            
+            // if this instruction is a new definition, add it
+            if (isDefinition(inst))
+              (*instVec)[(*index)[inst]] = true;
+            
+            prev = instVec;
+          }
+          
+          // return a copy of the final instruction's post-condition to put in out[bb]
+          return new BitVector(*instVec);
+        }
+        
         virtual void displayResults(Function &F) {
-          for (Function::iterator bi = F.begin(), be = F.end(); bi != be; bi++) {
-            for (BasicBlock::iterator ii = bi->begin(), ie = bi->end(); ii != ie; ii++) {
-              printBV((*printMap)[&*ii]);
-              errs() << "\t"<< *ii << "\n";
+          // iterate over basic blocks
+          Function::iterator bi = F.begin(), be = (F.end());
+          for (; bi != be; bi++) {
+            // display in[bb]
+            if (!isa<PHINode>(*(bi->begin())))
+              printBV( (*in)[&*bi] );
+            
+            // iterate over remaining instructions except very last one
+            // we don't print out[i] for the last one because we should actually print out the
+            // result of the meet operator at those points, i.e. in[next block]...              
+            BasicBlock::iterator ii = bi->begin(), ie = --(bi->end());
+            for (; ii != ie; ii++) {
+              errs() << "\t" << *ii << "\n";
+              if (!isa<PHINode>(*(++ii))) {
+                --ii;
+                printBV( (*instOut)[&*ii] );
+              } else --ii;
+              
             }
-
-            if (succ_begin(&*bi) == succ_end(&*bi)) {
-              printBV((*out)[&*bi]);
-            }
-            errs() << "\n\n";
+            errs() << "\t" << *(ii) << "\n";
+            errs() << "\n\n\n";
           }
+          // ...unless there are no more blocks
+          printBV( (*out)[&*(--be)] );
         }
-
-        virtual void printBV(BitVector * bv) {
+        
+        virtual void printBV(BitVector *bv) {
           errs() << "{ ";
-          for (int i = 0; i <= maxIndex; i++) {
-            if ((*bv)[i]) {
+          for (int i=0; i < numTotal; i++) {
+            if ( (*bv)[i] ) {
               WriteAsOperand(errs(), (*r_index)[i], false);
               errs() << " ";
             }
           }
-          errs() <<"}\n";
+          errs() << "}\n";
         }
-     
-        virtual BitVector* transfer(BasicBlock &bb) {
-          BitVector * result = new BitVector(*(*in)[&bb]);
-
-          for (BasicBlock::iterator ii = bb.begin(), ie = bb.end(); ii != ie; ii++) {
-            *((*printMap)[&*ii]) = *result;
-            if (isDefinition(&*ii))
-              (*result)[(*index)[&*ii]] = true;
-          }
-
-          return result;
-        }
+    
     };
 
     char ReachingDefinitions::ID = 0;
