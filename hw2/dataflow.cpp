@@ -24,62 +24,83 @@ namespace
           out = new DomainMap();
         }
      
-        // transfer function
-        // meet operator
-        // initial 
      	typedef ValueMap<BasicBlock*, BitVector*> DomainMap;
+     	
+     	// in[b] where b is a basic block
      	DomainMap *in;
+     	
+     	// out[b] where out is a basic block
      	DomainMap *out;
+     	
+		// bitvector such that meet(x, top) = x
+		// must be specified by subclass
      	BitVector *top;
      	
+        ~Dataflow() {
+        	for (DomainMap::iterator i = in->begin(), ie = in->end(); i != ie; i++) {
+            	delete i->second;
+        	}
+        	for (DomainMap::iterator i = out->begin(), ie = out->end(); i != ie; i++) {
+            	delete i->second;
+          	}
+          	delete top;
+        }
+     	
         virtual bool runOnFunction(Function &f) {
-            bool modified = false;
+            BasicBlock& entry = f.getEntryBlock();
             
-            BasicBlock & entry = f.getEntryBlock();
-            
+            // initialize in and out
             for (Function::iterator bi = f.begin(), be = f.end(); bi != be; bi++) {
                 if (forward) {
-                  (*out)[&(*bi)] = initialInteriorPoint(*bi);
-                  (*in)[&(*bi)] = new BitVector(*top);
+                	/* Forward flow means we need to first apply meet with out[b]
+                	   for all incoming blocks, b.
+                	   
+                	   With loops, out[b] may not always have been generated already,
+                	   so we need initial interior points. */
+                	(*out)[&(*bi)] = initialInteriorPoint(*bi);
+                	
+                	/* just a dummy bitvector of the same length as top,
+                	   it will never be read before being written to */
+                	(*in)[&(*bi)] = new BitVector(*top);
                 } else {
-                  (*in)[&(*bi)] = initialInteriorPoint(*bi);
-                  (*out)[&(*bi)] = new BitVector(*top);
+                	// opposite logic for reverse flow
+                	(*in)[&(*bi)] = initialInteriorPoint(*bi);
+                	(*out)[&(*bi)] = new BitVector(*top);
+                	
+                	// there isn't a unique exit node so we apply the boundary condition
+                	// when we reach a node with no successors in the loop below...
                 }
             }
             
-            getBoundaryCondition((*in)[&entry]);
-    	
-    		bool changed = true;
-    		ValueMap<BasicBlock*, bool> *visited = new ValueMap<BasicBlock*, bool>();
-    		while (changed) {
-    			for (Function::iterator bb = f.begin(), be = f.end(); bb != be; bb++) {
-    				(*visited)[&(*bb)] = false;
-    			}
+            // boundary conditions for entry node
+            getBoundaryCondition((*in)[&entry]);         
 
-		    	if (forward) {
-    				changed = reversePostOrder(&f.getEntryBlock(), *visited);
-    			} else {
-    				changed = postOrder(&f.getEntryBlock(), *visited);
-    			}
-    		}
+            
+            // iteration-level change detection
+        		bool changed = true;
+        		
+        		// need a map to track whether a block has already been visited in an iteration
+        		ValueMap<BasicBlock*, bool> *visited = new ValueMap<BasicBlock*, bool>();
+        		
+        		while (changed) {
+        			// initialize visited to false
+        			for (Function::iterator bb = f.begin(), be = f.end(); bb != be; bb++) {
+        				(*visited)[&(*bb)] = false;
+        			}
+    			
+    		    	if (forward) {
+        				changed = reversePostOrder(&entry, *visited);
+        			} else {
+        				changed = postOrder(&entry, *visited);
+        			}
+        		}
 
-            return modified;
+            return false;
         }
 
         virtual void getAnalysisUsage(AnalysisUsage &AU) const
         {
-          AU.setPreservesAll();
-        }
-              
-
-        ~Dataflow() {
-          for (DomainMap::iterator i = in->begin(), ie = in->end(); i != ie; i++) {
-            delete i->second;
-          }
-          for (DomainMap::iterator i = out->begin(), ie = out->end(); i != ie; i++) {
-            delete i->second;
-          }
-          delete top;
+        	AU.setPreservesAll();
         }
         
         // curNode is a pointer now because otherwise you have to keep &ing it.. but visited is still a refernce... gaaah
@@ -87,15 +108,17 @@ namespace
         	visited[curNode] = true;
         	bool changed = false;
 
-        	// apply meet operator over predecessors
-        	pred_iterator PI = pred_begin(curNode), PE = pred_end(curNode);
+        	pred_iterator PI = pred_begin(curNode), 
+        	              PE = pred_end(curNode);
         	if (PI != PE) {
-        		// fold meet over out[ predecessors	]
-    			*(*in)[curNode] = *(*out)[*PI];
+        		// begin with a copy of out[first predecessor]
+    			*(*in)[curNode] = *(*out)[*PI];  
+        		
+        		// fold meet over predecessors
         		for (PI++; PI != PE; PI++) {
         			meet((*in)[curNode], (*out)[*PI]);
         		}
-        	} // (otherwise entry)
+        	} // (otherwise entry node, in[entry] already set above)
         	
         	// apply transfer function
         	BitVector* newOut = transfer(*curNode);
@@ -125,15 +148,17 @@ namespace
     				changed |= postOrder(*SI, visited);
     		}
         	
-        	// apply meet operator over predecessors
         	succ_iterator SI = succ_begin(curNode), SE = succ_end(curNode);
         	if (SI != SE) {
-        		// fold meet over in[ successors ]
+        		// begin with a copy of in[first successor]
     			*(*out)[curNode] = *(*in)[*SI];
+    			
+	        	// fold meet operator over successors
         		for (SI++; SI != SE; SI++) {
         			meet((*out)[curNode], (*in)[*SI]);
         		}
         	} else {
+        		// boundary condition when it is an exit block
         		getBoundaryCondition((*out)[curNode]);
         	}
         	
@@ -152,10 +177,7 @@ namespace
         virtual void getBoundaryCondition(BitVector*) = 0;
         virtual void meet(BitVector*, const BitVector*) = 0;
         virtual BitVector * initialInteriorPoint(BasicBlock&) = 0;
-        virtual BitVector* transfer(BasicBlock &) = 0;
+        virtual BitVector* transfer(BasicBlock&) = 0;
     };
-
-//    char Dataflow::ID = 0;
-//    static RegisterPass<Dataflow> x("Dataflow", "Dataflow", false, false);
 }
 
