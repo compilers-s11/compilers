@@ -25,7 +25,7 @@ The user of this framework must define a class that inherits from both \verb|Dat
 
 The following functions and data members must be implemented by any subclass of Dataflow:
 \begin{itemize}
-\item \verb|BitVector * top|; This is a \verb|BitVector| that must be initialized by the subclass before the \verb|runOnFunction| method of the parent \verb|Dataflow| class is called. It represnts the \textbf{top} element of the underlying sub-lattice.
+\item \verb|BitVector * top|; This is a \verb|BitVector| that must be initialized by the subclass before the \verb|runOnFunction| method of the parent \verb|Dataflow| class is called. It represents the \textbf{top} element of the underlying sub-lattice.
 \item \verb|void getBoundaryCondition(BitVector*)|. This takes a pointer to a \verb|BitVector|, and modifies this \verb|BitVector| appropriately. For a forward pass, this is the \verb|out[b]| of the Entry node, and for a backward pass it is the \verb|in[b]| of the Exit node.
 \item \verb|BitVector * initialInteriorPoint(BasicBlock&)|; For a forward pass, this function should return the initial \verb|out[b]| for any block \verb|b|. For a backward pass it should return the initial \verb|in[b]| for any block \verb|b|. Returning a copy of \verb|top| is always correct, but not always the most efficient solution.
 
@@ -38,9 +38,9 @@ Note that in the above the \verb|BitVector|s for top, the boundary conditions an
 When the subclass wishes to run the dataflow pass, it must call the \verb|runOnFunction| method of its parent \verb|Dataflow| class, passing in a reference to the \verb|Function| on which the pass is to be run.
 
 \section{Reaching Definitions}
-We made use of the dataflow framework described above to implement Reaching Defintion analysis. This is a forward function pass, so the class \verb|Reaching| is a subclass of \verb|FunctionPass| and of \verb|Dataflow<true>|.
+We made use of the dataflow framework described above to implement Reaching Definition analysis. This is a forward function pass, so the class \verb|ReachingDefinitions| is a subclass of \verb|FunctionPass| and of \verb|Dataflow<true>|.
 
-Since the \verb|in| and \verb|out| sets are maintained as \verb|BitVector|s, we maintain a bidirectional map from definitions to their index in the \verb|BitVector|. This map is implemented by the two fields \verb|index| and \verb|r_index|. The maximum index is stored in \verb|maxIndex|. In order to initialize these three fields corectly, we go through all instructions once before running the actual dataflow algorithm, in order to give each definition an index.
+Since the \verb|in| and \verb|out| sets are maintained as \verb|BitVector|s, we maintain a bidirectional map from definitions to their index in the \verb|BitVector|. This map is implemented by the two fields \verb|index| and \verb|r_index|. The maximum index is stored in \verb|maxIndex|. In order to initialize these three fields correctly, we go through all instructions once before running the actual dataflow algorithm, in order to give each definition an index.
 
 We also store a mapping (called \verb|printMap|) from each instruction to the set of reaching definitions for the program point just before the instruction. This is not needed for the analysis itself, but it is needed to display the output, since we wish to display the reaching definitions are every program point. \verb|in| and \verb|out| are not sufficient for this purpose.
 
