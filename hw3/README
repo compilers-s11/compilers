@@ -1,0 +1,22 @@
+# 15-745 HW2 -- Salil and Cyrus
+
+## Files
+dataflow.cpp -- The framework implementation
+liveness.cpp -- The liveness pass
+reaching.cpp -- The reaching definitions pass
+sum.cpp -- Test source from assignment
+sum.o -- Test object file from assignment
+Makefile
+README
+report.pdf
+
+## Compiling
+make
+
+## Testing
+# Reaching Definitions
+opt -load llvm/Debug+Asserts/lib/DataflowFramework.so -ReachingDefinitions sum.o -o out
+
+# Liveness
+opt -load llvm/Debug+Asserts/lib/DataflowFramework.so -Liveness sum.o -o out
+
