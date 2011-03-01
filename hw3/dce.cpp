@@ -24,18 +24,18 @@ using namespace llvm;
 
 namespace
 {
-    struct FVA : public Dataflow<false>, public FunctionPass
+    struct DCE : public Dataflow<false>, public FunctionPass
     {
         static char ID;
 
-        FVA() : Dataflow<false>(), FunctionPass(ID) {
-          index = new ValueMap<Value*, int>();
+        DCE() : Dataflow<false>(), FunctionPass(ID) {
+          index = new std::map<Value*, int>();
           r_index = new std::vector<Value*>();
           instIn = new ValueMap<Instruction*, BitVector*>();
         }
 
         // map from instructions/argument to their index in the bitvector
-        ValueMap<Value*, int> *index;
+        std::map<Value*, int> *index;
         
         // map from index in bitvector back to instruction/argument
         std::vector<Value*> *r_index;
@@ -57,9 +57,14 @@ namespace
           *entry = BitVector(numTotal, true);
         }
         
+
+        //This is probably sufficient. isa<Terminator> is wrong because of invoke
         bool isDefinition(Instruction *ii) {
-          return (!(isa<TerminatorInst>(ii) || isa<StoreInst>(ii) || (isa<CallInst>(ii) && cast<CallInst>(ii)->getCalledFunction()->getReturnType()->isVoidTy())));
+          return (!ii->getType()->isVoidTy());
         }
+        //bool isDefinition(Instruction *ii) {
+        //  return (!(isa<TerminatorInst>(ii) || isa<StoreInst>(ii) || (isa<CallInst>(ii) && ii->getType()->isVoidTy())));
+        //}
 
         bool isEliminableDef(Instruction *ii) {
           return (!(isa<TerminatorInst>(ii) || isa<StoreInst>(ii) || isa<CallInst>(ii)));
@@ -81,6 +86,7 @@ namespace
             numArgs++;
           }
           numTotal = numArgs; 
+
           
           // add definitions to maps
           for (inst_iterator ii = inst_begin(&F), ie = inst_end(&F); ii != ie; ii++) {
@@ -100,11 +106,8 @@ namespace
           // run data flow 
           Dataflow<false>::runOnFunction(F);
 
-          DCE(F);
-         
-
-          // didn't modify nothing 
-          return true;
+          //true if something was modified
+          return Eliminate(F);
         }
         
         virtual BitVector* transfer(BasicBlock& bb) {
@@ -146,22 +149,30 @@ namespace
                             
             // add the arguments, unless it is a phi node
             //if (!isa<PHINode>(*ii)) {
-            User::op_iterator OI, OE;
-            for (OI = inst->op_begin(), OE=inst->op_end(); OI != OE; ++OI) {
-              if (isa<Instruction>(*OI) || isa<Argument>(*OI)) {
-                if (isa<CallInst>(inst)|| isa<TerminatorInst>(inst) 
-                    || (!(*instVec)[(*index)[inst]])
-                    || isa<StoreInst>(inst)) {
-                    (*instVec)[(*index)[*OI]] = false;
+            //
+            if (!isa<StoreInst>(inst) && (isa<CallInst>(inst)|| isa<TerminatorInst>(inst) 
+                || (!(*instVec)[(*index)[inst]]))) {
+              User::op_iterator OI, OE;
+              for (OI = inst->op_begin(), OE=inst->op_end(); OI != OE; ++OI) {
+                if (isa<Instruction>(*OI) || isa<Argument>(*OI)) {
+                  (*instVec)[(*index)[*OI]] = false;
                 }
               }
-            }
-                
-            if (isa<CallInst>(inst) || isa<InvokeInst>(inst)) {
+            } else if ((isa<CallInst>(inst) && !cast<CallInst>(ii)->getCalledFunction()->getReturnType()->isVoidTy()) || (isa<InvokeInst>(inst) && !cast<InvokeInst>(ii)->getCalledFunction()->getReturnType()->isVoidTy())) {
               (*instVec)[(*index)[inst]] = false;
+            } else if (isa<StoreInst>(inst)) {
+              StoreInst* si = cast<StoreInst>(inst);
+              Value * addr = si->getPointerOperand();
+
+              if (isa<AllocaInst>(addr) && !(*instVec)[(*index)[addr]]) {
+                Value * val = si->getValueOperand();
+                if (isa<Instruction>(val) || isa<Argument>(val))
+                  (*instVec)[(*index)[val]] = false;
+              }
             }
             //}
             next = instVec;
+
 
             if (ii == ib) break;
             --ii;
@@ -185,18 +196,34 @@ namespace
           return instVec;
         }
 
-        virtual void DCE(Function &F) {
-          BitVector *d = (*in)[&(F.getEntryBlock())];
-          for (inst_iterator ii = inst_begin(F), ie = inst_end(F); ii != ie; ii++) {
-            if (isEliminableDef(&*ii)) {
-              if ((*d)[(*index)[&*ii]]) {
+        virtual bool Eliminate(Function &F) {
+          bool modified = false;
+          BitVector *faint = (*in)[&(F.getEntryBlock())];
+
+          inst_iterator ii = inst_begin(F);
+
+          while (ii != inst_end(F)) {
+            if (isEliminableDef(&*ii) && ((*faint)[(*index)[&*ii]])) {
+              inst_iterator j = ii;
+              ++ii;
+              j->eraseFromParent();
+              modified = true;
+            } else if (isa<StoreInst>(&*ii)) {
+              Value * addr = cast<StoreInst>(&*ii)->getPointerOperand();
+              if (isa<AllocaInst>(addr) && (*faint)[(*index)[addr]]) {
                 inst_iterator j = ii;
                 ++ii;
                 j->eraseFromParent();
-                --ii;
+                modified = true;
+              } else {
+                ++ii;
               }
+            } else {
+              ++ii;
             }
           }
+
+          return modified;
         }
         
         virtual void displayResults(Function &F) {
@@ -240,7 +267,7 @@ namespace
     
     };
 
-    char FVA::ID = 0;
-    static RegisterPass<FVA> x("FVA", "FVA", false, false);
+    char DCE::ID = 0;
+    static RegisterPass<DCE> x("DCE", "DCE", false, false);
 }
 
