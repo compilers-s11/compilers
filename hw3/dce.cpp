@@ -48,7 +48,7 @@ namespace
         ValueMap<Instruction*, BitVector*> *instIn;
 
         virtual void meet(BitVector *op1, const BitVector *op2) {
-          // union
+          // intersection
           *op1 &= *op2;
         }
 
@@ -158,8 +158,6 @@ namespace
                   (*instVec)[(*index)[*OI]] = false;
                 }
               }
-            } else if ((isa<CallInst>(inst) && !cast<CallInst>(ii)->getCalledFunction()->getReturnType()->isVoidTy()) || (isa<InvokeInst>(inst) && !cast<InvokeInst>(ii)->getCalledFunction()->getReturnType()->isVoidTy())) {
-              (*instVec)[(*index)[inst]] = false;
             } else if (isa<StoreInst>(inst)) {
               StoreInst* si = cast<StoreInst>(inst);
               Value * addr = si->getPointerOperand();
@@ -196,8 +194,10 @@ namespace
           return instVec;
         }
 
+        // Dead Code Elimination. Removes all instructions that create/store to faint variables
+        // Will never remove function calls as these might have side effects
         virtual bool Eliminate(Function &F) {
-          bool modified = false;
+          bool modified = false; //did we actually change anything? LLVM needs this info
           BitVector *faint = (*in)[&(F.getEntryBlock())];
 
           inst_iterator ii = inst_begin(F);
@@ -222,6 +222,7 @@ namespace
               ++ii;
             }
           }
+
 
           return modified;
         }
