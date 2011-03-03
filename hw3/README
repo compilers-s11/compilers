@@ -1,11 +1,8 @@
-# 15-745 HW2 -- Salil and Cyrus
+# 15-745 HW3 -- Salil and Cyrus
 
 ## Files
 dataflow.cpp -- The framework implementation
-liveness.cpp -- The liveness pass
-reaching.cpp -- The reaching definitions pass
-sum.cpp -- Test source from assignment
-sum.o -- Test object file from assignment
+dce.cpp -- FVA and dead code elimination
 Makefile
 README
 report.pdf
@@ -15,8 +12,4 @@ make
 
 ## Testing
 # Reaching Definitions
-opt -load llvm/Debug+Asserts/lib/DataflowFramework.so -ReachingDefinitions sum.o -o out
-
-# Liveness
-opt -load llvm/Debug+Asserts/lib/DataflowFramework.so -Liveness sum.o -o out
-
+opt -load llvm/Debug+Asserts/lib/DCE.so -DCE sum.o -o out
