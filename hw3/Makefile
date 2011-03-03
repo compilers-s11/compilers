@@ -1,4 +1,5 @@
 LEVEL = ../../../..
+DISABLE_ASSERTIONS= 0
 LIBRARYNAME = DCE
 LOADABLE_MODULE = 1
 include $(LEVEL)/Makefile.common

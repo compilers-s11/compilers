@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.1415926-1.40.10 (TeX Live 2009/Debian) (format=pdflatex 2010.12.4)  10 FEB 2011 04:49
+This is pdfTeX, Version 3.1415926-1.40.10 (TeX Live 2009/Debian) (format=pdflatex 2010.12.4)  3 MAR 2011 04:47
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -215,52 +215,35 @@ LaTeX Font Info:    Try loading font information for U+msb on input line 20.
 
 (/usr/share/texmf-texlive/tex/latex/amsfonts/umsb.fd
 File: umsb.fd 2009/06/22 v3.00 AMS symbols B
-)
-LaTeX Font Info:    Try loading font information for OMS+cmr on input line 28.
+) [1
+
+{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}]
+LaTeX Font Info:    Try loading font information for OMS+cmr on input line 39.
 
 (/usr/share/texmf-texlive/tex/latex/base/omscmr.fd
 File: omscmr.fd 1999/05/25 v2.5h Standard LaTeX font definitions
 )
 LaTeX Font Info:    Font shape `OMS/cmr/m/n' in size <12> not available
-(Font)              Font shape `OMS/cmsy/m/n' tried instead on input line 28.
-
-Overfull \hbox (18.23918pt too wide) in paragraph at lines 29--30
-[][]\OT1/cmtt/m/n/12 void getBoundaryCondition(BitVector*)\OT1/cmr/m/n/12 . Thi
-s takes a pointer to a []\OT1/cmtt/m/n/12 BitVector\OT1/cmr/m/n/12 ,
- []
-
-
-Overfull \hbox (0.36662pt too wide) in paragraph at lines 30--31
-[][]\OT1/cmtt/m/n/12 BitVector * initialInteriorPoint(BasicBlock&)\OT1/cmr/m/n/
-12 ; For a for-ward pass, this
- []
-
-[1
-
-{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}]
-Overfull \hbox (2.89314pt too wide) in paragraph at lines 38--39
-[]\OT1/cmr/m/n/12 When the sub-class wishes to run the dataflow pass, it must c
-all the []\OT1/cmtt/m/n/12 runOnFunction
- []
-
-[2] [3] (./report.aux) ) 
+(Font)              Font shape `OMS/cmsy/m/n' tried instead on input line 39.
+ [2] (./report.aux) ) 
 Here is how much of TeX's memory you used:
- 2177 strings out of 495061
- 26817 string characters out of 1182621
+ 2202 strings out of 495061
+ 27081 string characters out of 1182621
  82042 words of memory out of 3000000
- 5362 multiletter control sequences out of 15000+50000
- 8475 words of font info for 33 fonts, out of 3000000 for 9000
+ 5379 multiletter control sequences out of 15000+50000
+ 12912 words of font info for 50 fonts, out of 3000000 for 9000
  28 hyphenation exceptions out of 8191
- 27i,6n,24p,543b,206s stack positions out of 5000i,500n,10000p,200000b,50000s
-</usr/share/texmf-texlive/fonts/type1/public/amsfonts/c
-m/cmbx12.pfb></usr/share/texmf-texlive/fonts/type1/public/amsfonts/cm/cmr10.pfb
-></usr/share/texmf-texlive/fonts/type1/public/amsfonts/cm/cmr12.pfb></usr/share
-/texmf-texlive/fonts/type1/public/amsfonts/cm/cmr17.pfb></usr/share/texmf-texli
-ve/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texmf-texlive/fonts/ty
-pe1/public/amsfonts/cm/cmtt12.pfb>
-Output written on report.pdf (3 pages, 77336 bytes).
+ 27i,6n,24p,440b,201s stack positions out of 5000i,500n,10000p,200000b,50000s
+</usr/share/texmf-texlive/fonts/type1/public/amsfonts/cm/c
+mbx12.pfb></usr/share/texmf-texlive/fonts/type1/public/amsfonts/cm/cmr10.pfb></
+usr/share/texmf-texlive/fonts/type1/public/amsfonts/cm/cmr12.pfb></usr/share/te
+xmf-texlive/fonts/type1/public/amsfonts/cm/cmr17.pfb></usr/share/texmf-texlive/
+fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texmf-texlive/fonts/type1
+/public/amsfonts/cm/cmti12.pfb></usr/share/texmf-texlive/fonts/type1/public/ams
+fonts/cm/cmtt12.pfb>
+Output written on report.pdf (2 pages, 77867 bytes).
 PDF statistics:
- 36 PDF objects out of 1000 (max. 8388607)
+ 37 PDF objects out of 1000 (max. 8388607)
  0 named destinations out of 1000 (max. 500000)
  1 words of extra memory for PDF output out of 10000 (max. 10000000)
 
